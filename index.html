@@ -244,7 +244,6 @@
               <th class="text-left p-3">Operador</th>
               <th class="text-center p-3">Curva</th>
               <th class="text-right p-3">Demanda</th>
-              <th class="text-right p-3 text-amber-400">Fila CD</th>
               <th class="text-right p-3 text-cyan-300">Finalizado</th>
               <th class="text-right p-3 text-rose-300">Pendente</th>
               <th class="text-right p-3">Atend.%</th>
@@ -367,18 +366,6 @@ function detectHeaderIndex(rows) {
   return -1;
 }
 
-function getMainOperator(merco, lmx, devintex) {
-  const m = parseNumber(merco);
-  const l = parseNumber(lmx);
-  const d = parseNumber(devintex);
-  const values = [
-    { name: "MERCOCAMP", abs: Math.abs(m) },
-    { name: "LMX", abs: Math.abs(l) },
-    { name: "DEVINTEX", abs: Math.abs(d) }
-  ].sort((a, b) => b.abs - a.abs);
-  return values[0].abs > 0 ? values[0].name : "-";
-}
-
 function parsePlanejamento(rows) {
   const headerIndex = detectHeaderIndex(rows);
   if (headerIndex < 0) throw new Error("Cabeçalho da aba PLANEJAMENTO não localizado.");
@@ -495,6 +482,7 @@ function parseShrink(rows) {
   }).filter(x => x.status || x.ltShrink !== null || x.qty);
 }
 
+// LÓGICA DE EXCEL LOCAL E RENDERIZAÇÃO
 async function loadDataFromWorkbook(workbook) {
   const getSheet = (names) => {
     for (const name of names) {
@@ -623,7 +611,7 @@ function applyFilters() {
     if (op.length > 0 && !op.includes(item.operacao)) return false;
     if (lista.length > 0 && !lista.includes(item.lista)) return false;
     
-    // Regra estrita: O detalhamento obedece fielmente ao operador selecionado.
+    // Regra estrita: O detalhamento obedece fielmente ao operador principal do SKU.
     if (operador.length > 0 && !operador.includes(item.operador)) return false;
     
     if (atendimento.length > 0) {
@@ -666,6 +654,18 @@ function getConsolidatedStock(items) {
   const result = { merco: 0, lmx: 0, devintex: 0 };
   for (const stock of bySku.values()) { result.merco += stock.merco; result.lmx += stock.lmx; result.devintex += stock.devintex; }
   return result;
+}
+
+function getMainOperator(merco, lmx, devintex) {
+  const m = parseNumber(merco);
+  const l = parseNumber(lmx);
+  const d = parseNumber(devintex);
+  const values = [
+    { name: "MERCOCAMP", abs: Math.abs(m) },
+    { name: "LMX", abs: Math.abs(l) },
+    { name: "DEVINTEX", abs: Math.abs(d) }
+  ].sort((a, b) => b.abs - a.abs);
+  return values[0].abs > 0 ? values[0].name : "-";
 }
 
 function averagePositive(values) {
@@ -748,6 +748,7 @@ function updatePipeline() {
     { name: "DEVOLUÇÃO / CORTE", qty: devolucaoCorte }
   ];
 
+  // Renderização padrão de caixas (Sem recuo e sem cores diferenciadas)
   box.innerHTML = groups.map(g => `
     <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border border-slate-800">
       <span class="text-slate-300 font-bold text-xs">${g.name}</span>
@@ -790,8 +791,9 @@ function updateLeadTimes() {
 function renderTable() {
   const tbody = document.getElementById("skuTable");
   const rows = filteredSkus.slice(0, 700);
-  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="13" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="12" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
 
+  // A coluna "Fila CD" e seus dados foram removidos do layout da tabela
   tbody.innerHTML = rows.map(item => `
     <tr class="hover:bg-slate-800/50">
       <td class="p-3 font-bold text-white">${item.sku}</td>
@@ -806,7 +808,6 @@ function renderTable() {
       <td class="p-3 text-slate-300">${item.operador}</td>
       <td class="p-3 text-center">${item.curva}</td>
       <td class="p-3 text-right">${formatNumber(item.demanda)}</td>
-      <td class="p-3 text-right text-amber-400 font-bold">${formatNumber(item.separacao)}</td>
       <td class="p-3 text-right text-cyan-300 font-bold">${formatNumber(item.finalizado)}</td>
       <td class="p-3 text-right text-rose-300 font-bold">${formatNumber(Math.max(0, item.demanda - item.finalizado))}</td>
       <td class="p-3 text-right ${item.atendimento >= 100 ? "text-emerald-300" : "text-amber-300"}">${formatPct(item.atendimento)}</td>

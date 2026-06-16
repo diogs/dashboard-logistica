@@ -751,12 +751,13 @@ function updatePipeline() {
   const box = document.getElementById("pipelineBox");
   const demanda = sum(filteredSkus, "demanda");
   const finalizado = sum(filteredSkus, "finalizado");
-  const separacaoTotal = sum(filteredSkus, "separacao");
 
+  let separacaoPipelineTotal = 0;
   const separacaoPorOperador = filteredSkus.reduce((acc, s) => {
-    // Exclui MercoCamp, agrupa o resto (LMX, DEVINTEX)
+    // Exclui MercoCamp, agrupa o resto (LMX, DEVINTEX) e soma para o Total do Pipeline
     if (s.operador && s.operador !== 'MERCOCAMP' && s.separacao > 0) {
       acc[s.operador] = (acc[s.operador] || 0) + s.separacao;
+      separacaoPipelineTotal += s.separacao;
     }
     return acc;
   }, {});
@@ -791,7 +792,7 @@ function updatePipeline() {
   const groups = [
     { name: "DEMANDA TOTAL", qty: demanda },
     { name: "FINALIZADO", qty: finalizado },
-    { name: "AGUARDANDO SEPARAÇÃO", qty: separacaoTotal }
+    { name: "AGUARDANDO SEPARAÇÃO", qty: separacaoPipelineTotal }
   ];
 
   // Adiciona as caixas de separação para os operadores restantes (LMX, DEVINTEX)

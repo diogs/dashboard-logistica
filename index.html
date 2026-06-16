@@ -766,7 +766,15 @@ function updatePipeline() {
   const box = document.getElementById("pipelineBox");
   const demanda = sum(filteredSkus, "demanda");
   const finalizado = sum(filteredSkus, "finalizado");
-  const separacaoTotal = sum(filteredSkus, "separacao");
+
+  // Agrupa a separação por operador, ignorando MERCOCAMP e operadores indefinidos ("-")
+  const separacaoPorOperador = filteredSkus.reduce((acc, sku) => {
+    const op = sku.operador;
+    if (op !== "MERCOCAMP" && op !== "-" && sku.separacao > 0) {
+      acc[op] = (acc[op] || 0) + sku.separacao;
+    }
+    return acc;
+  }, {});
 
   const activeSkus = new Set(filteredSkus.map(s => normalizeText(s.sku)));
   const hasFilters = filteredSkus.length < allSkus.length;
@@ -777,17 +785,29 @@ function updatePipeline() {
     return isDevol && skuMatch;
   }).reduce((acc, x) => acc + x.qty, 0);
 
-  const groups = [
+  // Começa a construir a lista de itens do Pipeline
+  const pipelineItems = [
     { name: "DEMANDA TOTAL", qty: demanda },
-    { name: "FINALIZADO", qty: finalizado },
-    { name: "SEPARAÇÃO LMX", qty: separacaoTotal },
+    { name: "FINALIZADO", qty: finalizado }
+  ];
+
+  // Adiciona as linhas dinâmicas de separação para cada operador encontrado (LMX, DEVINTEX, etc.)
+  for (const [operador, qty] of Object.entries(separacaoPorOperador)) {
+    pipelineItems.push({ name: `SEPARAÇÃO ${operador}`, qty: qty });
+  }
+
+  // Se nenhum operador (além do MERCO) tiver separação, e o total geral de separação for > 0, 
+  // você pode querer exibir um fallback genérico, mas de acordo com sua regra, mostramos por operador.
+  // Se não houver nada, as linhas simplesmente não aparecem.
+
+  // Adiciona o restante dos itens
+  pipelineItems.push(
     { name: "SHERINK ENVIADO", qty: sum(filteredSkus, "shrinkEnviado") },
     { name: "PENDENTE (Ruptura)", qty: Math.max(0, demanda - finalizado) },
     { name: "DEVOLUÇÃO / CORTE", qty: devolucaoCorte }
-  ];
+  );
 
-  // Renderização padrão de caixas (Sem recuo e sem cores diferenciadas)
-  box.innerHTML = groups.map(g => `
+  box.innerHTML = pipelineItems.map(g => `
     <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border border-slate-800">
       <span class="text-slate-300 font-bold text-xs">${g.name}</span>
       <span class="text-white font-black">${formatNumber(g.qty)} <small class="text-slate-500">un</small></span>

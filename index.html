@@ -67,14 +67,14 @@
         </div>
         <div>
           <h1 class="text-xl font-black text-white">Supply Control <span class="text-xs bg-slate-800 border border-slate-700 px-2 py-1 rounded-full text-slate-300">LOCAL EXCEL</span></h1>
-          <p class="text-xs text-slate-400">Dashboard a operar via ficheiro de dados local</p>
+          <p class="text-xs text-slate-400">Dashboard via arquivo local</p>
         </div>
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
         <div class="text-right">
           <p class="text-xs text-slate-400">Origem de Dados</p>
-          <p id="sourceStatus" class="text-xs font-bold text-amber-400">A aguardar Ficheiro</p>
+          <p id="sourceStatus" class="text-xs font-bold text-amber-400">Aguardando Arquivo</p>
         </div>
 
         <button onclick="exportToExcel()" class="px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg flex items-center">
@@ -98,7 +98,7 @@
       </div>
 
       <div class="bg-card border border-line rounded-2xl p-5">
-        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">A aguardar Separação</p>
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Aguardando Separação</p>
         <h2 id="kpiSeparacao" class="text-4xl font-black text-amber-400 mt-2">0</h2>
         <p class="text-xs text-slate-400 mt-2"><span class="bg-amber-500/20 text-amber-300 px-2 py-1 rounded font-bold">Fila de CD</span> unidades</p>
       </div>
@@ -228,7 +228,7 @@
       <div class="p-5 border-b border-line flex flex-col sm:flex-row justify-between gap-2">
         <div>
           <h3 class="font-black text-white"><i class="fa-solid fa-list text-slate-400 mr-2"></i>Detalhamento de SKUs</h3>
-          <p class="text-xs text-slate-400">Planeamento consolidado por SKU</p>
+          <p class="text-xs text-slate-400">Planejamento consolidado por SKU</p>
         </div>
         <p class="text-sm text-slate-300">Total: <span id="skuCount" class="font-bold text-white">0</span> SKUs</p>
       </div>
@@ -569,8 +569,8 @@ async function loadDataFromWorkbook(workbook) {
 function handleFileUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
-  setStatus("A ler Ficheiro...", "text-amber-400");
-  toast("A processar o ficheiro local...", "info");
+  setStatus("Lendo Arquivo...", "text-amber-400");
+  toast("Processando o arquivo local...", "info");
   
   const reader = new FileReader();
   reader.onload = function(evt) {
@@ -713,7 +713,7 @@ function getConsolidatedStock(items) {
 }
 
 function averagePositive(values) {
-  const nums = values.filter(v => typeof v === 'number' && !isNaN(v));
+  const nums = values.filter(v => typeof v === 'number' && !isNaN(v) && v > 0);
   if (!nums.length) return 0;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
@@ -762,32 +762,47 @@ function updateStockChart() {
   });
 }
 
+function getSeparacaoOperator(item) {
+  // Regra operacional para Aguardando Separação:
+  // usa o operador onde há saldo positivo para separar.
+  // MERCOCAMP não entra na quebra operacional de separação.
+  const dev = Math.max(0, parseNumber(item.devintex));
+  const lmx = Math.max(0, parseNumber(item.lmx));
+
+  if (dev > 0 && dev >= lmx) return "DEVINTEX";
+  if (lmx > 0) return "LMX";
+  return "-";
+}
+
 function updatePipeline() {
   const box = document.getElementById("pipelineBox");
   const demanda = sum(filteredSkus, "demanda");
   const finalizado = sum(filteredSkus, "finalizado");
 
-  let separacaoPipelineTotal = 0;
-  const separacaoPorOperador = filteredSkus.reduce((acc, s) => {
-    // Exclui MercoCamp, agrupa o resto (LMX, DEVINTEX) e soma para o Total do Pipeline
-    if (s.operador && s.operador !== 'MERCOCAMP' && s.separacao > 0) {
-      acc[s.operador] = (acc[s.operador] || 0) + s.separacao;
-      separacaoPipelineTotal += s.separacao;
+  const separacaoPorOperador = { DEVINTEX: 0, LMX: 0 };
+
+  filteredSkus.forEach(s => {
+    const sep = Math.max(0, parseNumber(s.separacao));
+    if (sep <= 0) return;
+
+    const opSep = getSeparacaoOperator(s);
+    if (opSep === "DEVINTEX" || opSep === "LMX") {
+      separacaoPorOperador[opSep] += sep;
     }
-    return acc;
-  }, {});
+  });
+
+  const separacaoPipelineTotal = separacaoPorOperador.DEVINTEX + separacaoPorOperador.LMX;
 
   const activeSkus = new Set(filteredSkus.map(s => normalizeText(s.sku)));
   const hasFilters = filteredSkus.length < allSkus.length;
-  
+
   const opF = selectedFilters.opFilter;
   const listaF = selectedFilters.listaFilter;
   const operF = selectedFilters.operadorFilter;
 
   const devolucaoCorte = transitoRows.filter(x => {
     const isDevol = x.status.includes("DEVOL") || x.status.includes("CORTE") || x.status.includes("SEM ESTOQUE");
-    
-    // Filtro inteligente usando as colunas lidas do In-Trânsito
+
     let passOp = true;
     if (opF.length > 0 && x.canal) passOp = opF.some(o => x.canal.includes(o));
 
@@ -797,7 +812,6 @@ function updatePipeline() {
     let passOper = true;
     if (operF.length > 0 && x.operador && x.operador !== "-") passOper = operF.includes(x.operador);
 
-    // Confirmação dupla
     const skuMatch = x.sku ? activeSkus.has(normalizeText(x.sku)) : !hasFilters;
     const validContext = (x.canal || x.obs) ? (passOp && passLista && passOper && skuMatch) : skuMatch;
 
@@ -807,19 +821,13 @@ function updatePipeline() {
   const groups = [
     { name: "DEMANDA TOTAL", qty: demanda },
     { name: "FINALIZADO", qty: finalizado },
-    { name: "AGUARDANDO SEPARAÇÃO", qty: separacaoPipelineTotal }
+    { name: "AGUARDANDO SEPARAÇÃO", qty: separacaoPipelineTotal },
+    { name: "AGUARDANDO SEPARAÇÃO DEVINTEX", qty: separacaoPorOperador.DEVINTEX },
+    { name: "AGUARDANDO SEPARAÇÃO LMX", qty: separacaoPorOperador.LMX },
+    { name: "SHERINK ENVIADO", qty: sum(filteredSkus, "shrinkEnviado") },
+    { name: "PENDENTE (Ruptura)", qty: Math.max(0, demanda - finalizado) },
+    { name: "DEVOLUÇÃO / CORTE", qty: devolucaoCorte }
   ];
-
-  // Adiciona as caixas de separação para os operadores restantes (LMX, DEVINTEX)
-  Object.entries(separacaoPorOperador)
-    .sort((a, b) => a[0].localeCompare(b[0])) 
-    .forEach(([opName, qty]) => {
-      groups.push({ name: `SEPARAÇÃO ${opName}`, qty: qty });
-    });
-
-  groups.push({ name: "SHERINK ENVIADO", qty: sum(filteredSkus, "shrinkEnviado") });
-  groups.push({ name: "PENDENTE (Ruptura)", qty: Math.max(0, demanda - finalizado) });
-  groups.push({ name: "DEVOLUÇÃO / CORTE", qty: devolucaoCorte });
 
   box.innerHTML = groups.map(g => `
     <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border border-slate-800">

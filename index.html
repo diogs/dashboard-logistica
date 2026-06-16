@@ -248,6 +248,7 @@
               <th class="text-center p-3">Curva</th>
               <th class="text-right p-3">Demanda</th>
               <th class="text-right p-3 text-cyan-300">Finalizado</th>
+              <th class="text-right p-3 text-rose-300">Pendente</th>
               <th class="text-right p-3">Atend.%</th>
               <th class="text-right p-3 text-emerald-300">Merco</th>
               <th class="text-right p-3 text-violet-300">LMX</th>
@@ -763,7 +764,7 @@ function updateLeadTimes() {
 function renderTable() {
   const tbody = document.getElementById("skuTable");
   const rows = filteredSkus.slice(0, 700);
-  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="11" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="12" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
 
   tbody.innerHTML = rows.map(item => `
     <tr class="hover:bg-slate-800/50">
@@ -780,6 +781,7 @@ function renderTable() {
       <td class="p-3 text-center">${item.curva}</td>
       <td class="p-3 text-right">${formatNumber(item.demanda)}</td>
       <td class="p-3 text-right font-bold text-cyan-300">${formatNumber(item.finalizado)}</td>
+      <td class="p-3 text-right font-bold text-rose-300">${formatNumber(Math.max(0, item.demanda - item.finalizado))}</td>
       <td class="p-3 text-right ${item.atendimento >= 100 ? "text-emerald-300" : "text-amber-300"}">${formatPct(item.atendimento)}</td>
       <td class="p-3 text-right text-emerald-300">${formatNumber(item.merco)}</td>
       <td class="p-3 text-right text-violet-300">${formatNumber(item.lmx)}</td>

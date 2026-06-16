@@ -444,7 +444,7 @@ function parseTransito(rows) {
     ltRecebimento: findIdx(["LEAD TIME RECEBIMENTO", "LT RECEBIMENTO"], 15),
     operador: findIdx(["OPERADOR LOGISTICO", "OPERADOR LOGÍSTICO", "OPERADOR"], 20),
     canal: findIdx(["CANAL", "OPERAÇÃO", "OPERACAO"], 21),
-    obs: findIdx(["OBS", "LISTA"], 22)
+    obs: findIdx(["LISTA", "OBS"], 22)
   };
 
   const today = new Date();
@@ -539,20 +539,39 @@ async function loadDataFromWorkbook(workbook) {
     try { transitoRows = parseTransito(getSheet(["IN_TRANSITO", "INTRANSITO", "IN TRANSITO"])); } catch(e) { console.warn(e); transitoRows = []; }
     try { shrinkRows = parseShrink(getSheet(["PRODUCAO_SHRINK", "PRODUÇÃO_SHRINK", "SHRINK"])); } catch(e) { console.warn(e); shrinkRows = []; }
 
-    // Mapeamento cruzado do Operador para garantir a precisão total baseada na aba IN_TRANSITO
-    const opMap = new Map();
+    // Mapeamento cruzado do Operador baseado na aba IN_TRANSITO.
+    // Prioridade: SKU + LISTA. Fallback: SKU.
+    // Isso corrige SKUs repetidos em listas diferentes, evitando jogar separação no operador errado.
+    const opMapSkuLista = new Map();
+    const opMapSku = new Map();
+
     transitoRows.forEach(tr => {
-      if (tr.sku && tr.operador && tr.operador !== "-") {
-        opMap.set(normalizeText(tr.sku), tr.operador);
+      if (!tr.sku || !tr.operador || tr.operador === "-") return;
+
+      const skuKey = normalizeText(tr.sku);
+      const listaKey = normalizeText(tr.obs || tr.lista || "");
+
+      if (skuKey && listaKey) {
+        opMapSkuLista.set(`${skuKey}|${listaKey}`, tr.operador);
+      }
+
+      // Só preenche fallback se ainda não existir, para evitar sobrescrever com outro operador.
+      if (skuKey && !opMapSku.has(skuKey)) {
+        opMapSku.set(skuKey, tr.operador);
       }
     });
 
     allSkus.forEach(s => {
-      const realOp = opMap.get(normalizeText(s.sku));
+      const skuKey = normalizeText(s.sku);
+      const listaKey = normalizeText(s.lista);
+      const realOp = opMapSkuLista.get(`${skuKey}|${listaKey}`) || opMapSku.get(skuKey);
+
       if (realOp) {
         s.operador = realOp;
       }
     });
+
+    console.log("Mapa operador SKU+LISTA:", opMapSkuLista.size, "Mapa SKU:", opMapSku.size);
 
     renderFilters();
     applyFilters();
@@ -779,16 +798,18 @@ function updatePipeline() {
   const demanda = sum(filteredSkus, "demanda");
   const finalizado = sum(filteredSkus, "finalizado");
 
+  // Regra correta confirmada:
+  // AGUARDANDO SEPARAÇÃO por operador = coluna AGUARDANDO SEPARAÇÃO do PLANEJAMENTO
+  // distribuída pelo OPERADOR LOGÍSTICO mapeado da aba IN_TRANSITO.
   const separacaoPorOperador = { DEVINTEX: 0, LMX: 0 };
 
   filteredSkus.forEach(s => {
     const sep = Math.max(0, parseNumber(s.separacao));
     if (sep <= 0) return;
 
-    const opSep = getSeparacaoOperator(s);
-    if (opSep === "DEVINTEX" || opSep === "LMX") {
-      separacaoPorOperador[opSep] += sep;
-    }
+    const op = normalizeText(s.operador);
+    if (op.includes("DEVINTEX")) separacaoPorOperador.DEVINTEX += sep;
+    else if (op.includes("LMX")) separacaoPorOperador.LMX += sep;
   });
 
   const separacaoPipelineTotal = separacaoPorOperador.DEVINTEX + separacaoPorOperador.LMX;
@@ -817,6 +838,12 @@ function updatePipeline() {
 
     return isDevol && validContext;
   }).reduce((acc, x) => acc + x.qty, 0);
+
+  console.log("Separação por operador logístico:", {
+    total: separacaoPipelineTotal,
+    devintex: separacaoPorOperador.DEVINTEX,
+    lmx: separacaoPorOperador.LMX
+  });
 
   const groups = [
     { name: "DEMANDA TOTAL", qty: demanda },

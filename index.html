@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -67,14 +67,14 @@
         </div>
         <div>
           <h1 class="text-xl font-black text-white">Supply Control <span class="text-xs bg-slate-800 border border-slate-700 px-2 py-1 rounded-full text-slate-300">LOCAL EXCEL</span></h1>
-          <p class="text-xs text-slate-400">Dashboard operando via arquivo de dados local</p>
+          <p class="text-xs text-slate-400">Dashboard a operar via ficheiro de dados local</p>
         </div>
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
         <div class="text-right">
           <p class="text-xs text-slate-400">Origem de Dados</p>
-          <p id="sourceStatus" class="text-xs font-bold text-amber-400">Aguardando Arquivo</p>
+          <p id="sourceStatus" class="text-xs font-bold text-amber-400">A aguardar Ficheiro</p>
         </div>
 
         <button onclick="exportToExcel()" class="px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg flex items-center">
@@ -98,7 +98,7 @@
       </div>
 
       <div class="bg-card border border-line rounded-2xl p-5">
-        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Aguardando Separação</p>
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">A aguardar Separação</p>
         <h2 id="kpiSeparacao" class="text-4xl font-black text-amber-400 mt-2">0</h2>
         <p class="text-xs text-slate-400 mt-2"><span class="bg-amber-500/20 text-amber-300 px-2 py-1 rounded font-bold">Fila de CD</span> unidades</p>
       </div>
@@ -383,6 +383,11 @@ function parsePlanejamento(rows) {
   const headerIndex = detectHeaderIndex(rows);
   if (headerIndex < 0) throw new Error("Cabeçalho da aba PLANEJAMENTO não localizado.");
   
+  const header = rows[headerIndex].map(normalizeText);
+  const findIdx = (aliases, fallback) => { const found = header.findIndex(h => aliases.some(a => h.includes(normalizeText(a)))); return found >= 0 ? found : fallback; };
+  
+  const opIdx = findIdx(["OPERADOR LOGISTICO", "OPERADOR LOGÍSTICO", "OPERADOR"], -1);
+
   const parsed = [];
   for (const row of rows.slice(headerIndex + 1)) {
     const sku = String(row[COLS.sku] ?? "").trim();
@@ -396,13 +401,23 @@ function parsePlanejamento(rows) {
     const devintex = parseNumber(row[COLS.devintex]);        
     const atendimento = demanda > 0 ? Math.min(100, (finalizado / demanda) * 100) : parseNumber(row[COLS.atendimento]);
 
+    let operador = "-";
+    if (opIdx >= 0 && row[opIdx]) {
+      operador = String(row[opIdx]).trim().toUpperCase();
+      if (operador.includes("MERCO")) operador = "MERCOCAMP";
+      else if (operador.includes("DEVINTEX")) operador = "DEVINTEX";
+      else if (operador.includes("LMX")) operador = "LMX";
+    } else {
+      operador = getMainOperator(merco, lmx, devintex);
+    }
+
     parsed.push({
       lista, operacao: String(row[COLS.operacao] ?? "SHOPEE").trim().toUpperCase(),
       sku, descricao: String(row[COLS.descricao] ?? "").trim(),
       curva: String(row[COLS.curva] ?? "C").trim(), situacao: String(row[COLS.situacao] ?? "").trim(),
       separacao: parseNumber(row[COLS.separacao]), shrinkSolicitado: parseNumber(row[COLS.shrinkSolicitado]),
       shrinkEnviado: parseNumber(row[COLS.shrinkEnviado]), finalizado, demanda, merco, lmx, devintex,
-      operador: getMainOperator(merco, lmx, devintex),
+      operador: operador,
       shrink: normalizeText(row[COLS.shrink]).startsWith("S") ? "SIM" : "NÃO",
       kit: normalizeText(row[COLS.kit]).startsWith("S") ? "SIM" : "NÃO",
       atendimento
@@ -418,10 +433,18 @@ function parseTransito(rows) {
   const header = rows[headerIndex].map(normalizeText);
   const findIdx = (aliases, fallback) => { const found = header.findIndex(h => aliases.some(a => h.includes(normalizeText(a)))); return found >= 0 ? found : fallback; };
 
-  const IDX = { dataInput: findIdx(["DATA INPUT", "INPUT"], 0), sku: findIdx(["SKU", "CÓDIGO", "CODIGO", "PRODUTO"], 1), qtd: findIdx(["QTD", "QUANTIDADE"], 4), status: findIdx(["STATUS", "SITUACAO"], 7),
-    dataExpedicao: findIdx(["DATA EXPEDICAO", "EXPEDICAO"], 11), dataRecebimento: findIdx(["DATA RECEBIMENTO", "RECEBIMENTO"], 12),
-    ltSeparacao: findIdx(["LEAD TIME SEPARACAO", "LT SEPARACAO"], 14), ltRecebimento: findIdx(["LEAD TIME RECEBIMENTO", "LT RECEBIMENTO"], 15),
-    operador: findIdx(["OPERADOR"], 20)
+  const IDX = {
+    dataInput: findIdx(["DATA INPUT", "INPUT"], 0), 
+    sku: findIdx(["SKU", "CÓDIGO", "CODIGO", "PRODUTO"], 1), 
+    qtd: findIdx(["QTD UND COMPRA", "QTD", "QUANTIDADE", "UND COMPRA"], 4), 
+    status: findIdx(["STATUS", "SITUACAO"], 7),
+    dataExpedicao: findIdx(["DATA EXPEDICAO", "EXPEDICAO"], 11), 
+    dataRecebimento: findIdx(["DATA RECEBIMENTO", "RECEBIMENTO"], 12),
+    ltSeparacao: findIdx(["LEAD TIME SEPARACAO", "LT SEPARACAO"], 14), 
+    ltRecebimento: findIdx(["LEAD TIME RECEBIMENTO", "LT RECEBIMENTO"], 15),
+    operador: findIdx(["OPERADOR LOGISTICO", "OPERADOR LOGÍSTICO", "OPERADOR"], 20),
+    canal: findIdx(["CANAL", "OPERAÇÃO", "OPERACAO"], 21),
+    obs: findIdx(["OBS", "LISTA"], 22)
   };
 
   const today = new Date();
@@ -436,13 +459,11 @@ function parseTransito(rows) {
 
     let ltSep = ltSepPlanilha;
     const isPendingSep = statusText.includes("AGUARDANDO") || statusText.includes("SEPARA") || statusText.includes("PENDENTE");
-    
     if (isPendingSep && !dExp && dInput) ltSep = daysBetween(dInput, today);
     else if (ltSep === null || (ltSep <= 0 && !dExp)) ltSep = daysBetween(dInput, dExp);
 
     let ltRec = ltRecPlanilha;
     const isPendingRec = statusText.includes("TRANSITO") || statusText.includes("TRANSPORTE") || statusText.includes("ENVIADO");
-    
     if (isPendingRec && !dRec && dInput) ltRec = daysBetween(dInput, today);
     else if (ltRec === null || (ltRec <= 0 && !dRec)) ltRec = daysBetween(dInput, dRec);
     
@@ -456,7 +477,15 @@ function parseTransito(rows) {
     else if (operador.includes("DEVINTEX")) operador = "DEVINTEX";
     else if (operador.includes("LMX")) operador = "LMX";
 
-    return { status: statusText, sku: r[IDX.sku] ? String(r[IDX.sku]).trim() : "", operador, qty: parseNumber(r[IDX.qtd]), ltSep, ltTrans, ltRec };
+    return { 
+      status: statusText, 
+      sku: r[IDX.sku] ? String(r[IDX.sku]).trim() : "", 
+      operador, 
+      canal: IDX.canal >= 0 ? normalizeText(r[IDX.canal]) : "",
+      obs: IDX.obs >= 0 ? normalizeText(r[IDX.obs]) : "",
+      qty: parseNumber(r[IDX.qtd]), 
+      ltSep, ltTrans, ltRec 
+    };
   }).filter(x => x.status || x.qty || x.ltSep !== null || x.ltRec !== null);
 }
 
@@ -553,7 +582,7 @@ function renderFilters() {
   const container = document.getElementById('filtersContainer');
   container.innerHTML = '';
   
-  // Extrai as listas válidas do estado atual filtrado
+  // Extrai as listas válidas do estado atual filtrado para permitir Cascata
   const validLists = [...new Set(filteredSkus.length > 0 ? filteredSkus.map(x => x.lista) : allSkus.map(x => x.lista))].filter(Boolean).sort();
   filterOptions.listaFilter.options = validLists.map(l => ({v: l, t: l}));
   
@@ -613,20 +642,18 @@ function applyFilters() {
   const kit = selectedFilters.kitFilter;
   const sep = selectedFilters.sepFilter;
 
-  // Filtro Estrito para garantir perfeição na seleção de Operador
+  // Filtro Estrito (Passagem 1)
   filteredSkus = allSkus.filter(item => {
     if (q && !normalizeText(item.sku + " " + item.descricao).includes(q)) return false;
     if (op.length > 0 && !op.includes(item.operacao)) return false;
     if (operador.length > 0 && !operador.includes(item.operador)) return false;
-    
-    // Lista ignorada nesta primeira passagem para permitir a cascata
     return true;
   });
   
-  // Atualiza as opções do dropdown dependentes e renderiza
+  // Renderiza filtros pendentes (Cascata)
   renderFilters();
 
-  // Agora aplica o filtro de lista final para a exibição na tabela
+  // Aplica filtro de lista final para a exibição na tabela (Passagem 2)
   filteredSkus = filteredSkus.filter(item => {
     if (selectedFilters.listaFilter.length > 0 && !selectedFilters.listaFilter.includes(item.lista)) return false;
     if (atendimento.length > 0) {
@@ -727,6 +754,7 @@ function updatePipeline() {
   const separacaoTotal = sum(filteredSkus, "separacao");
 
   const separacaoPorOperador = filteredSkus.reduce((acc, s) => {
+    // Exclui MercoCamp, agrupa o resto (LMX, DEVINTEX)
     if (s.operador && s.operador !== 'MERCOCAMP' && s.separacao > 0) {
       acc[s.operador] = (acc[s.operador] || 0) + s.separacao;
     }
@@ -748,12 +776,12 @@ function updatePipeline() {
     if (opF.length > 0 && x.canal) passOp = opF.some(o => x.canal.includes(o));
 
     let passLista = true;
-    if (listaF.length > 0 && x.obs) passLista = listaF.includes(x.obs);
+    if (listaF.length > 0 && x.obs) passLista = listaF.some(l => x.obs.includes(l));
 
     let passOper = true;
     if (operF.length > 0 && x.operador && x.operador !== "-") passOper = operF.includes(x.operador);
 
-    // Confirmação dupla: cruza a nova inteligência com o mapeamento de SKU
+    // Confirmação dupla
     const skuMatch = x.sku ? activeSkus.has(normalizeText(x.sku)) : !hasFilters;
     const validContext = (x.canal || x.obs) ? (passOp && passLista && passOper && skuMatch) : skuMatch;
 
@@ -766,8 +794,9 @@ function updatePipeline() {
     { name: "AGUARDANDO SEPARAÇÃO", qty: separacaoTotal }
   ];
 
+  // Adiciona as caixas de separação para os operadores restantes (LMX, DEVINTEX)
   Object.entries(separacaoPorOperador)
-    .sort((a, b) => a[0].localeCompare(b[0])) // Organiza em ordem alfabética (Devintex depois LMX)
+    .sort((a, b) => a[0].localeCompare(b[0])) 
     .forEach(([opName, qty]) => {
       groups.push({ name: `SEPARAÇÃO ${opName}`, qty: qty });
     });
@@ -818,7 +847,7 @@ function updateLeadTimes() {
 function renderTable() {
   const tbody = document.getElementById("skuTable");
   const rows = filteredSkus.slice(0, 700);
-  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="11" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="12" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
 
   tbody.innerHTML = rows.map(item => `
     <tr class="hover:bg-slate-800/50">

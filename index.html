@@ -228,7 +228,7 @@
       <div class="p-5 border-b border-line flex flex-col sm:flex-row justify-between gap-2">
         <div>
           <h3 class="font-black text-white"><i class="fa-solid fa-list text-slate-400 mr-2"></i>Detalhamento de SKUs</h3>
-          <p class="text-xs text-slate-400">Planejamento consolidado por SKU</p>
+          <p class="text-xs text-slate-400">Planeamento consolidado por SKU</p>
         </div>
         <p class="text-sm text-slate-300">Total: <span id="skuCount" class="font-bold text-white">0</span> SKUs</p>
       </div>
@@ -305,7 +305,7 @@ function parseNumber(value) {
   return isNaN(n) ? 0 : n;
 }
 
-function formatNumber(value) { return Math.round(value || 0).toLocaleString("pt-BR"); }
+function formatNumber(value) { return Math.round(value || 0).toLocaleString("pt-PT"); }
 function formatPct(value) { return `${Math.round(value || 0)}%`; }
 
 function toast(message, type = "info") {
@@ -381,7 +381,7 @@ function getMainOperator(merco, lmx, devintex) {
 
 function parsePlanejamento(rows) {
   const headerIndex = detectHeaderIndex(rows);
-  if (headerIndex < 0) throw new Error("Cabeçalho da aba PLANEJAMENTO não localizado.");
+  if (headerIndex < 0) throw new Error("Cabeçalho da aba PLANEAMENTO não localizado.");
   
   const header = rows[headerIndex].map(normalizeText);
   const findIdx = (aliases, fallback) => { const found = header.findIndex(h => aliases.some(a => h.includes(normalizeText(a)))); return found >= 0 ? found : fallback; };
@@ -423,7 +423,7 @@ function parsePlanejamento(rows) {
       atendimento
     });
   }
-  if (!parsed.length) throw new Error("Nenhum SKU válido encontrado na aba PLANEJAMENTO.");
+  if (!parsed.length) throw new Error("Nenhum SKU válido encontrado na aba PLANEAMENTO.");
   return parsed;
 }
 
@@ -539,6 +539,21 @@ async function loadDataFromWorkbook(workbook) {
     try { transitoRows = parseTransito(getSheet(["IN_TRANSITO", "INTRANSITO", "IN TRANSITO"])); } catch(e) { console.warn(e); transitoRows = []; }
     try { shrinkRows = parseShrink(getSheet(["PRODUCAO_SHRINK", "PRODUÇÃO_SHRINK", "SHRINK"])); } catch(e) { console.warn(e); shrinkRows = []; }
 
+    // Mapeamento cruzado do Operador para garantir a precisão total baseada na aba IN_TRANSITO
+    const opMap = new Map();
+    transitoRows.forEach(tr => {
+      if (tr.sku && tr.operador && tr.operador !== "-") {
+        opMap.set(normalizeText(tr.sku), tr.operador);
+      }
+    });
+
+    allSkus.forEach(s => {
+      const realOp = opMap.get(normalizeText(s.sku));
+      if (realOp) {
+        s.operador = realOp;
+      }
+    });
+
     renderFilters();
     applyFilters();
 
@@ -554,8 +569,8 @@ async function loadDataFromWorkbook(workbook) {
 function handleFileUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
-  setStatus("Lendo Arquivo...", "text-amber-400");
-  toast("Processando o arquivo local...", "info");
+  setStatus("A ler Ficheiro...", "text-amber-400");
+  toast("A processar o ficheiro local...", "info");
   
   const reader = new FileReader();
   reader.onload = function(evt) {
@@ -570,12 +585,12 @@ async function tryAutoLoad() {
   try {
     const res = await fetch('data.xlsx');
     if (res.ok) {
-       setStatus("Carregando data.xlsx...", "text-amber-400");
+       setStatus("A carregar data.xlsx...", "text-amber-400");
        const buffer = await res.arrayBuffer();
        const workbook = XLSX.read(buffer, {type: 'array', cellDates: true});
        loadDataFromWorkbook(workbook);
     }
-  } catch(e) { console.log("Sem leitura automática. Aguardando upload."); }
+  } catch(e) { console.log("Sem leitura automática. A aguardar upload."); }
 }
 
 function renderFilters() {
@@ -772,7 +787,7 @@ function updatePipeline() {
   const devolucaoCorte = transitoRows.filter(x => {
     const isDevol = x.status.includes("DEVOL") || x.status.includes("CORTE") || x.status.includes("SEM ESTOQUE");
     
-    // Filtro inteligente usando as novas colunas lidas do In-Trânsito
+    // Filtro inteligente usando as colunas lidas do In-Trânsito
     let passOp = true;
     if (opF.length > 0 && x.canal) passOp = opF.some(o => x.canal.includes(o));
 

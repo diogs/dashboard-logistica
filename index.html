@@ -599,20 +599,24 @@ function toggleFilterSelection(id, value) {
 function applyFilters() {
   const q = normalizeText(document.getElementById("searchInput").value);
   const op = selectedFilters.opFilter;
-  const lista = selectedFilters.listaFilter;
+  let lista = selectedFilters.listaFilter;
   const operador = selectedFilters.operadorFilter;
   const atendimento = selectedFilters.atendimentoFilter;
   const shrink = selectedFilters.shrinkFilter;
   const kit = selectedFilters.kitFilter;
   const sep = selectedFilters.sepFilter;
 
-  filteredSkus = allSkus.filter(item => {
+  // 1. Filtra tudo EXCETO as listas, para sabermos quais listas sobram
+  const skusSemFiltroDeLista = allSkus.filter(item => {
     if (q && !normalizeText(item.sku + " " + item.descricao).includes(q)) return false;
     if (op.length > 0 && !op.includes(item.operacao)) return false;
-    if (lista.length > 0 && !lista.includes(item.lista)) return false;
     
-    // Regra estrita: O detalhamento obedece fielmente ao operador principal do SKU.
-    if (operador.length > 0 && !operador.includes(item.operador)) return false;
+    if (operador.length > 0) {
+      const matchMerco = operador.includes("MERCOCAMP") && item.merco !== 0;
+      const matchLmx = operador.includes("LMX") && item.lmx !== 0;
+      const matchDev = operador.includes("DEVINTEX") && item.devintex !== 0;
+      if (!matchMerco && !matchLmx && !matchDev && !operador.includes(item.operador)) return false;
+    }
     
     if (atendimento.length > 0) {
       const isConcluido = item.atendimento >= 100;
@@ -628,6 +632,46 @@ function applyFilters() {
     }
     return true;
   });
+
+  // 2. Extrai as listas válidas do momento baseado nos outros filtros
+  const validLists = [...new Set(skusSemFiltroDeLista.map(x => x.lista).filter(Boolean))].sort();
+
+  // Limpa da seleção atual qualquer lista que tenha ficado inválida (ex: selecionou Meli_01 e trocou a op. pra Shopee)
+  selectedFilters.listaFilter = selectedFilters.listaFilter.filter(l => validLists.includes(l));
+  lista = selectedFilters.listaFilter;
+
+  // Atualiza visualmente o botão de Listas
+  const btnLista = document.getElementById('btn-listaFilter');
+  const labelLista = document.getElementById('label-listaFilter');
+  if (btnLista && labelLista) {
+    if (lista.length === 0) {
+      labelLista.textContent = `Listas: Todas`;
+      btnLista.classList.remove('bg-indigo-600', 'border-indigo-500', 'text-white');
+      btnLista.classList.add('bg-slate-950', 'border-slate-700', 'text-slate-300');
+    } else {
+      labelLista.textContent = `Listas (${lista.length})`;
+      btnLista.classList.remove('bg-slate-950', 'border-slate-700', 'text-slate-300');
+      btnLista.classList.add('bg-indigo-600', 'border-indigo-500', 'text-white');
+    }
+  }
+
+  // 3. Reconstrói as caixinhas (checkboxes) do dropdown de Listas apenas com as válidas
+  const dropdownLista = document.getElementById('dropdown-listaFilter');
+  if (dropdownLista) {
+    dropdownLista.innerHTML = validLists.map(l => `
+      <label class="flex items-center space-x-3 p-2 hover:bg-slate-800 rounded cursor-pointer">
+        <input type="checkbox" class="form-checkbox" onchange="toggleFilterSelection('listaFilter', '${l}')" ${lista.includes(l) ? 'checked' : ''}>
+        <span class="text-sm text-slate-300">${l}</span>
+      </label>
+    `).join('');
+  }
+
+  // 4. Aplica o filtro final, agora incluindo a(s) lista(s) se alguma estiver marcada
+  filteredSkus = skusSemFiltroDeLista.filter(item => {
+    if (lista.length > 0 && !lista.includes(item.lista)) return false;
+    return true;
+  });
+
   updateDashboard();
 }
 

@@ -684,8 +684,12 @@ function updateDashboard() {
   const stock = getConsolidatedStock(filteredSkus);
   const estoqueTotal = stock.merco + stock.lmx + stock.devintex;
   const rupturaSku = filteredSkus.filter(item => {
+    // Calcula o que realmente falta atender para este SKU
+    const pendente = Math.max(0, item.demanda - item.finalizado);
     const estoqueItem = Math.max(0, item.merco) + Math.max(0, item.lmx) + Math.max(0, item.devintex);
-    return item.demanda > estoqueItem;
+    
+    // Só é ruptura se AINDA falta algo E esse algo é maior que o estoque disponível
+    return pendente > 0 && pendente > estoqueItem;
   }).length;
 
   document.getElementById("kpiEstoqueTotal").textContent = formatNumber(estoqueTotal);

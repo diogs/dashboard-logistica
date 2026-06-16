@@ -612,12 +612,8 @@ function applyFilters() {
     if (op.length > 0 && !op.includes(item.operacao)) return false;
     if (lista.length > 0 && !lista.includes(item.lista)) return false;
     
-    if (operador && operador.length > 0) {
-      const matchMerco = operador.includes("MERCOCAMP") && item.merco > 0;
-      const matchLmx = operador.includes("LMX") && item.lmx > 0;
-      const matchDev = operador.includes("DEVINTEX") && item.devintex > 0;
-      if (!matchMerco && !matchLmx && !matchDev && !operador.includes(item.operador)) return false;
-    }
+    // Regra de operador simplificada e estrita: só mostra se o Operador Principal for o selecionado
+    if (operador.length > 0 && !operador.includes(item.operador)) return false;
     
     if (atendimento.length > 0) {
       const isConcluido = item.atendimento >= 100;
@@ -741,16 +737,17 @@ function updatePipeline() {
   const groups = {
     "DEMANDA TOTAL": demanda,
     "FINALIZADO": finalizado,
-    "AGUARDANDO SEPARAÇÃO (Total)": separacaoTotal,
-    "↳ FILA REAL LMX (Via Trânsito)": separacaoLMXTransito,
+    "AGUARDANDO SEPARAÇÃO": separacaoTotal,
+    "SEPARAÇÃO LMX": separacaoLMXTransito,
     "SHERINK ENVIADO": sum(filteredSkus, "shrinkEnviado"),
     "PENDENTE (Ruptura)": Math.max(0, demanda - finalizado),
     "DEVOLUÇÃO / CORTE": devolucaoCorte
   };
 
+  // Renderização padrão, limpa e padronizada com as demais linhas
   box.innerHTML = Object.entries(groups).map(([name, qty]) => `
-    <div class="flex justify-between items-center p-3 rounded-xl ${name.includes('↳') ? 'bg-indigo-900/20 border-indigo-500/30 ml-4' : 'bg-slate-950 border-slate-800'} border">
-      <span class="${name.includes('↳') ? 'text-indigo-300' : 'text-slate-300'} font-bold ${name.includes('↳') ? 'text-[11px]' : 'text-xs'}">${name}</span>
+    <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border-slate-800 border">
+      <span class="text-slate-300 font-bold text-xs">${name}</span>
       <span class="text-white font-black">${formatNumber(qty)} <small class="text-slate-500">un</small></span>
     </div>
   `).join("");

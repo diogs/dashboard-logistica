@@ -140,9 +140,8 @@
         <h3 class="font-black text-white"><i class="fa-solid fa-filter text-indigo-400 mr-2"></i>Filtros</h3>
         <input id="searchInput" oninput="applyFilters()" placeholder="Pesquisar por SKU ou Descrição..." class="w-full lg:w-96 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 text-white">
       </div>
-
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3" id="filtersContainer">
-        <!-- Renderizado pelo JavaScript -->
+        <!-- Renderizado dinamicamente pelo JavaScript -->
       </div>
     </section>
 
@@ -366,6 +365,20 @@ function detectHeaderIndex(rows) {
   return -1;
 }
 
+function getMainOperator(merco, lmx, devintex) {
+  const m = parseNumber(merco);
+  const l = parseNumber(lmx);
+  const d = parseNumber(devintex);
+  
+  const values = [
+    { name: "MERCOCAMP", abs: Math.abs(m) },
+    { name: "LMX", abs: Math.abs(l) },
+    { name: "DEVINTEX", abs: Math.abs(d) }
+  ].sort((a, b) => b.abs - a.abs);
+  
+  return values[0].abs > 0 ? values[0].name : "-";
+}
+
 function parsePlanejamento(rows) {
   const headerIndex = detectHeaderIndex(rows);
   if (headerIndex < 0) throw new Error("Cabeçalho da aba PLANEJAMENTO não localizado.");
@@ -482,7 +495,6 @@ function parseShrink(rows) {
   }).filter(x => x.status || x.ltShrink !== null || x.qty);
 }
 
-// LÓGICA DE EXCEL LOCAL E RENDERIZAÇÃO
 async function loadDataFromWorkbook(workbook) {
   const getSheet = (names) => {
     for (const name of names) {
@@ -498,9 +510,6 @@ async function loadDataFromWorkbook(workbook) {
     try { transitoRows = parseTransito(getSheet(["IN_TRANSITO", "INTRANSITO", "IN TRANSITO"])); } catch(e) { console.warn(e); transitoRows = []; }
     try { shrinkRows = parseShrink(getSheet(["PRODUCAO_SHRINK", "PRODUÇÃO_SHRINK", "SHRINK"])); } catch(e) { console.warn(e); shrinkRows = []; }
 
-    const lists = [...new Set(allSkus.map(x => x.lista).filter(Boolean))].sort();
-    filterOptions.listaFilter.options = lists.map(l => ({v: l, t: l}));
-    
     renderFilters();
     applyFilters();
 
@@ -543,11 +552,23 @@ async function tryAutoLoad() {
 function renderFilters() {
   const container = document.getElementById('filtersContainer');
   container.innerHTML = '';
+  
+  // Extrai as listas válidas do estado atual filtrado
+  const validLists = [...new Set(filteredSkus.length > 0 ? filteredSkus.map(x => x.lista) : allSkus.map(x => x.lista))].filter(Boolean).sort();
+  filterOptions.listaFilter.options = validLists.map(l => ({v: l, t: l}));
+  
+  // Remove seleções antigas que não são mais válidas no novo contexto
+  selectedFilters.listaFilter = selectedFilters.listaFilter.filter(l => validLists.includes(l));
+
   for(const [id, def] of Object.entries(filterOptions)) {
+    const count = selectedFilters[id].length;
+    const btnClass = count > 0 ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-slate-700 text-slate-300';
+    const labelText = count > 0 ? `${def.label} (${count})` : `${def.label}: Todas`;
+    
     container.innerHTML += `
       <div class="relative filter-container">
-        <button id="btn-${id}" onclick="toggleDropdown('${id}')" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm text-left flex justify-between items-center transition-colors text-slate-300">
-          <span id="label-${id}" class="truncate pr-2">${def.label}: Todas</span>
+        <button id="btn-${id}" onclick="toggleDropdown('${id}')" class="w-full ${btnClass} border rounded-xl px-3 py-3 text-sm text-left flex justify-between items-center transition-colors">
+          <span id="label-${id}" class="truncate pr-2">${labelText}</span>
           <i class="fa-solid fa-chevron-down text-slate-500 text-xs"></i>
         </button>
         <div id="dropdown-${id}" class="hidden filter-dropdown absolute z-50 w-full mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-h-60 overflow-y-auto p-2">
@@ -579,96 +600,45 @@ function toggleFilterSelection(id, value) {
   const index = arr.indexOf(value);
   if (index > -1) arr.splice(index, 1);
   else arr.push(value);
-  
-  const count = arr.length;
-  const btn = document.getElementById(`btn-${id}`);
-  const label = document.getElementById(`label-${id}`);
-  
-  if (count === 0) {
-    label.textContent = `${filterOptions[id].label}: Todas`;
-    btn.classList.remove('bg-indigo-600', 'border-indigo-500', 'text-white');
-    btn.classList.add('bg-slate-950', 'border-slate-700', 'text-slate-300');
-  } else {
-    label.textContent = `${filterOptions[id].label} (${count})`;
-    btn.classList.remove('bg-slate-950', 'border-slate-700', 'text-slate-300');
-    btn.classList.add('bg-indigo-600', 'border-indigo-500', 'text-white');
-  }
   applyFilters();
 }
 
 function applyFilters() {
   const q = normalizeText(document.getElementById("searchInput").value);
   const op = selectedFilters.opFilter;
-  let lista = selectedFilters.listaFilter;
+  const lista = selectedFilters.listaFilter;
   const operador = selectedFilters.operadorFilter;
   const atendimento = selectedFilters.atendimentoFilter;
   const shrink = selectedFilters.shrinkFilter;
   const kit = selectedFilters.kitFilter;
   const sep = selectedFilters.sepFilter;
 
-  // 1. Filtra tudo EXCETO as listas, para sabermos quais listas sobram
-  const skusSemFiltroDeLista = allSkus.filter(item => {
+  // Filtro Estrito para garantir perfeição na seleção de Operador
+  filteredSkus = allSkus.filter(item => {
     if (q && !normalizeText(item.sku + " " + item.descricao).includes(q)) return false;
     if (op.length > 0 && !op.includes(item.operacao)) return false;
+    if (operador.length > 0 && !operador.includes(item.operador)) return false;
     
-    if (operador.length > 0) {
-      const matchMerco = operador.includes("MERCOCAMP") && item.merco !== 0;
-      const matchLmx = operador.includes("LMX") && item.lmx !== 0;
-      const matchDev = operador.includes("DEVINTEX") && item.devintex !== 0;
-      if (!matchMerco && !matchLmx && !matchDev && !operador.includes(item.operador)) return false;
-    }
-    
+    // Lista ignorada nesta primeira passagem para permitir a cascata
+    return true;
+  });
+  
+  // Atualiza as opções do dropdown dependentes e renderiza
+  renderFilters();
+
+  // Agora aplica o filtro de lista final para a exibição na tabela
+  filteredSkus = filteredSkus.filter(item => {
+    if (selectedFilters.listaFilter.length > 0 && !selectedFilters.listaFilter.includes(item.lista)) return false;
     if (atendimento.length > 0) {
       const isConcluido = item.atendimento >= 100;
       if (!atendimento.some(val => (val === 'concluido' && isConcluido) || (val === 'pendente' && !isConcluido))) return false;
     }
-    
     if (shrink.length > 0 && !shrink.includes(item.shrink)) return false;
     if (kit.length > 0 && !kit.includes(item.kit)) return false;
-    
     if (sep.length > 0) {
       const hasSep = item.separacao > 0;
       if (!sep.some(val => (val === 'sim' && hasSep) || (val === 'nao' && !hasSep))) return false;
     }
-    return true;
-  });
-
-  // 2. Extrai as listas válidas do momento baseado nos outros filtros
-  const validLists = [...new Set(skusSemFiltroDeLista.map(x => x.lista).filter(Boolean))].sort();
-
-  // Limpa da seleção atual qualquer lista que tenha ficado inválida (ex: selecionou Meli_01 e trocou a op. pra Shopee)
-  selectedFilters.listaFilter = selectedFilters.listaFilter.filter(l => validLists.includes(l));
-  lista = selectedFilters.listaFilter;
-
-  // Atualiza visualmente o botão de Listas
-  const btnLista = document.getElementById('btn-listaFilter');
-  const labelLista = document.getElementById('label-listaFilter');
-  if (btnLista && labelLista) {
-    if (lista.length === 0) {
-      labelLista.textContent = `Listas: Todas`;
-      btnLista.classList.remove('bg-indigo-600', 'border-indigo-500', 'text-white');
-      btnLista.classList.add('bg-slate-950', 'border-slate-700', 'text-slate-300');
-    } else {
-      labelLista.textContent = `Listas (${lista.length})`;
-      btnLista.classList.remove('bg-slate-950', 'border-slate-700', 'text-slate-300');
-      btnLista.classList.add('bg-indigo-600', 'border-indigo-500', 'text-white');
-    }
-  }
-
-  // 3. Reconstrói as caixinhas (checkboxes) do dropdown de Listas apenas com as válidas
-  const dropdownLista = document.getElementById('dropdown-listaFilter');
-  if (dropdownLista) {
-    dropdownLista.innerHTML = validLists.map(l => `
-      <label class="flex items-center space-x-3 p-2 hover:bg-slate-800 rounded cursor-pointer">
-        <input type="checkbox" class="form-checkbox" onchange="toggleFilterSelection('listaFilter', '${l}')" ${lista.includes(l) ? 'checked' : ''}>
-        <span class="text-sm text-slate-300">${l}</span>
-      </label>
-    `).join('');
-  }
-
-  // 4. Aplica o filtro final, agora incluindo a(s) lista(s) se alguma estiver marcada
-  filteredSkus = skusSemFiltroDeLista.filter(item => {
-    if (lista.length > 0 && !lista.includes(item.lista)) return false;
     return true;
   });
 
@@ -698,18 +668,6 @@ function getConsolidatedStock(items) {
   const result = { merco: 0, lmx: 0, devintex: 0 };
   for (const stock of bySku.values()) { result.merco += stock.merco; result.lmx += stock.lmx; result.devintex += stock.devintex; }
   return result;
-}
-
-function getMainOperator(merco, lmx, devintex) {
-  const m = parseNumber(merco);
-  const l = parseNumber(lmx);
-  const d = parseNumber(devintex);
-  const values = [
-    { name: "MERCOCAMP", abs: Math.abs(m) },
-    { name: "LMX", abs: Math.abs(l) },
-    { name: "DEVINTEX", abs: Math.abs(d) }
-  ].sort((a, b) => b.abs - a.abs);
-  return values[0].abs > 0 ? values[0].name : "-";
 }
 
 function averagePositive(values) {
@@ -766,15 +724,10 @@ function updatePipeline() {
   const box = document.getElementById("pipelineBox");
   const demanda = sum(filteredSkus, "demanda");
   const finalizado = sum(filteredSkus, "finalizado");
+  const separacaoTotal = sum(filteredSkus, "separacao");
 
-  // Agrupa a separação por operador, ignorando MERCOCAMP e operadores indefinidos ("-")
-  const separacaoPorOperador = filteredSkus.reduce((acc, sku) => {
-    const op = sku.operador;
-    if (op !== "MERCOCAMP" && op !== "-" && sku.separacao > 0) {
-      acc[op] = (acc[op] || 0) + sku.separacao;
-    }
-    return acc;
-  }, {});
+  const separacaoLMX = filteredSkus.filter(s => s.operador === 'LMX').reduce((acc, s) => acc + s.separacao, 0);
+  const separacaoDevintex = filteredSkus.filter(s => s.operador === 'DEVINTEX').reduce((acc, s) => acc + s.separacao, 0);
 
   const activeSkus = new Set(filteredSkus.map(s => normalizeText(s.sku)));
   const hasFilters = filteredSkus.length < allSkus.length;
@@ -785,22 +738,15 @@ function updatePipeline() {
     return isDevol && skuMatch;
   }).reduce((acc, x) => acc + x.qty, 0);
 
-  // Começa a construir a lista de itens do Pipeline
   const pipelineItems = [
     { name: "DEMANDA TOTAL", qty: demanda },
-    { name: "FINALIZADO", qty: finalizado }
+    { name: "FINALIZADO", qty: finalizado },
+    { name: "AGUARDANDO SEPARAÇÃO", qty: separacaoTotal }
   ];
 
-  // Adiciona as linhas dinâmicas de separação para cada operador encontrado (LMX, DEVINTEX, etc.)
-  for (const [operador, qty] of Object.entries(separacaoPorOperador)) {
-    pipelineItems.push({ name: `SEPARAÇÃO ${operador}`, qty: qty });
-  }
+  if (separacaoLMX > 0) pipelineItems.push({ name: "SEPARAÇÃO LMX", qty: separacaoLMX });
+  if (separacaoDevintex > 0) pipelineItems.push({ name: "SEPARAÇÃO DEVINTEX", qty: separacaoDevintex });
 
-  // Se nenhum operador (além do MERCO) tiver separação, e o total geral de separação for > 0, 
-  // você pode querer exibir um fallback genérico, mas de acordo com sua regra, mostramos por operador.
-  // Se não houver nada, as linhas simplesmente não aparecem.
-
-  // Adiciona o restante dos itens
   pipelineItems.push(
     { name: "SHERINK ENVIADO", qty: sum(filteredSkus, "shrinkEnviado") },
     { name: "PENDENTE (Ruptura)", qty: Math.max(0, demanda - finalizado) },
@@ -849,9 +795,8 @@ function updateLeadTimes() {
 function renderTable() {
   const tbody = document.getElementById("skuTable");
   const rows = filteredSkus.slice(0, 700);
-  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="12" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="11" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
 
-  // A coluna "Fila CD" e seus dados foram removidos do layout da tabela
   tbody.innerHTML = rows.map(item => `
     <tr class="hover:bg-slate-800/50">
       <td class="p-3 font-bold text-white">${item.sku}</td>

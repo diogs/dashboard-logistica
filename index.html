@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Supply Control - Shopee & Meli</title>
+  <title>Supply Control - Dashboard</title>
 
-  <!-- Tailwind, Chart.js, FontAwesome e SheetJS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -30,6 +29,33 @@
     ::-webkit-scrollbar { width: 7px; height: 7px; }
     ::-webkit-scrollbar-track { background:#0f172a; }
     ::-webkit-scrollbar-thumb { background:#475569; border-radius: 4px; }
+    
+    /* Estilos customizados para os checkboxes */
+    .form-checkbox {
+      appearance: none;
+      background-color: #0f172a;
+      margin: 0;
+      font: inherit;
+      color: currentColor;
+      width: 1.15em;
+      height: 1.15em;
+      border: 1px solid #475569;
+      border-radius: 0.15em;
+      display: grid;
+      place-content: center;
+    }
+    .form-checkbox::before {
+      content: "";
+      width: 0.65em;
+      height: 0.65em;
+      transform: scale(0);
+      transition: 120ms transform ease-in-out;
+      box-shadow: inset 1em 1em white;
+      transform-origin: bottom left;
+      clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+    }
+    .form-checkbox:checked { background-color: #4f46e5; border-color: #4f46e5; }
+    .form-checkbox:checked::before { transform: scale(1); }
   </style>
 </head>
 
@@ -38,58 +64,60 @@
     <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
       <div class="flex items-center gap-3">
         <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-          <i class="fa-solid fa-box-open text-white text-xl"></i>
+          <i class="fa-solid fa-boxes-packing text-white text-xl"></i>
         </div>
         <div>
-          <h1 class="text-xl font-black text-white">Supply Control <span class="text-xs bg-slate-800 border border-slate-700 px-2 py-1 rounded-full text-slate-300">SHOPEE & MELI</span></h1>
-          <p class="text-xs text-slate-400">Dashboard Offline • Lendo arquivo Excel local (data.xlsx)</p>
+          <h1 class="text-xl font-black text-white">Supply Control <span class="text-xs bg-slate-800 border border-slate-700 px-2 py-1 rounded-full text-slate-300">LOCAL EXCEL</span></h1>
+          <p class="text-xs text-slate-400">Dashboard operando via arquivo de dados local</p>
         </div>
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
         <div class="text-right">
           <p class="text-xs text-slate-400">Origem de Dados</p>
-          <p id="sourceStatus" class="text-xs font-bold text-amber-400">Aguardando...</p>
+          <p id="sourceStatus" class="text-xs font-bold text-amber-400">Aguardando Arquivo</p>
         </div>
 
-        <button onclick="exportToExcel()" class="px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg transition-colors">
-          <i class="fa-solid fa-file-excel mr-2"></i>Baixar Relatório
+        <button onclick="exportToExcel()" class="px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg flex items-center">
+          <i class="fa-solid fa-file-excel mr-2"></i>Exportar
         </button>
 
-        <button onclick="loadAllData()" class="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg transition-colors">
-          <i class="fa-solid fa-rotate-right mr-2"></i>Recarregar Base
-        </button>
+        <!-- Botão oficial de leitura Local Offline -->
+        <input type="file" id="excelUpload" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)">
+        <label for="excelUpload" class="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg cursor-pointer flex items-center">
+          <i class="fa-solid fa-upload mr-2"></i>Carregar Excel
+        </label>
       </div>
     </div>
   </header>
 
   <main class="max-w-7xl mx-auto p-4 lg:p-8 space-y-6">
     <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5">
         <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Demanda em Lista</p>
         <h2 id="kpiDemanda" class="text-4xl font-black text-white mt-2">0</h2>
         <p class="text-xs text-slate-400 mt-2"><span class="bg-blue-500/20 text-blue-300 px-2 py-1 rounded font-bold">Consolidado</span> unidades</p>
       </div>
 
-      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5">
         <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Aguardando Separação</p>
         <h2 id="kpiSeparacao" class="text-4xl font-black text-amber-400 mt-2">0</h2>
         <p class="text-xs text-slate-400 mt-2"><span class="bg-amber-500/20 text-amber-300 px-2 py-1 rounded font-bold">Fila de CD</span> unidades</p>
       </div>
 
-      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5">
         <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Produção de Shrink</p>
         <h2 id="kpiShrink" class="text-4xl font-black text-violet-400 mt-2">0</h2>
         <p class="text-xs text-slate-400 mt-2"><span class="bg-violet-500/20 text-violet-300 px-2 py-1 rounded font-bold">Envelopamento</span></p>
       </div>
 
-      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5">
         <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Pendente / Falta</p>
         <h2 id="kpiPendente" class="text-4xl font-black text-rose-400 mt-2">0</h2>
         <p class="text-xs text-slate-400 mt-2"><span class="bg-rose-500/20 text-rose-300 px-2 py-1 rounded font-bold">Ruptura</span></p>
       </div>
 
-      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5">
         <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Atendimento Médio</p>
         <h2 id="kpiAtendimento" class="text-4xl font-black text-emerald-400 mt-2">0%</h2>
         <p class="text-xs text-slate-400 mt-2"><span class="bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded font-bold">Calculado</span></p>
@@ -97,77 +125,44 @@
     </section>
 
     <section class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5">
         <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Estoque Total Consolidado</p>
         <h2 id="kpiEstoqueTotal" class="text-3xl font-black text-blue-400 mt-2">0</h2>
         <p class="text-xs text-slate-400 mt-2">Merco + LMX + Devintex, sem duplicar SKU</p>
       </div>
-      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5">
         <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">SKUs em Ruptura</p>
         <h2 id="kpiRupturaSku" class="text-3xl font-black text-rose-400 mt-2">0</h2>
         <p class="text-xs text-slate-400 mt-2">TOTAL LISTA maior que estoque disponível</p>
       </div>
     </section>
 
-    <section class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+    <!-- PAINEL DE FILTROS COM MULTI-SELEÇÃO -->
+    <section class="bg-card border border-line rounded-2xl p-5">
       <div class="flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between mb-4">
-        <h3 class="font-black text-white"><i class="fa-solid fa-filter text-indigo-400 mr-2"></i>Filtros de Busca</h3>
-        <input id="searchInput" oninput="applyFilters()" placeholder="Pesquisar por SKU ou Descrição..." class="w-full lg:w-96 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 transition-colors">
+        <h3 class="font-black text-white"><i class="fa-solid fa-filter text-indigo-400 mr-2"></i>Filtros</h3>
+        <input id="searchInput" oninput="applyFilters()" placeholder="Pesquisar por SKU ou Descrição..." class="w-full lg:w-96 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 text-white">
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-        <select id="opFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
-          <option value="">Operação: Todas</option>
-          <option value="SHOPEE">SHOPEE</option>
-          <option value="MERCADO LIVRE">MERCADO LIVRE</option>
-          <option value="MELI">Meli</option>
-        </select>
-
-        <select id="listaFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
-          <option value="">Listas: Todas</option>
-        </select>
-
-        <select id="atendimentoFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
-          <option value="">Atendimento: Todos</option>
-          <option value="pendente">&lt; 100%</option>
-          <option value="concluido">100%</option>
-        </select>
-
-        <select id="shrinkFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
-          <option value="">Shrink: Todos</option>
-          <option value="SIM">Com Shrink</option>
-          <option value="NÃO">Sem Shrink</option>
-        </select>
-
-        <select id="kitFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
-          <option value="">Kit: Todos</option>
-          <option value="SIM">É Kit</option>
-          <option value="NÃO">Não é Kit</option>
-        </select>
-
-        <select id="sepFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
-          <option value="">Separação: Todas</option>
-          <option value="sim">Em Separação</option>
-          <option value="nao">Sem Separação</option>
-        </select>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3" id="filtersContainer">
+        <!-- Renderizado pelo JavaScript -->
       </div>
     </section>
 
     <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <div class="lg:col-span-8 bg-card border border-line rounded-2xl p-5 shadow-lg">
+      <div class="lg:col-span-8 bg-card border border-line rounded-2xl p-5">
         <h3 class="font-black text-white mb-4"><i class="fa-solid fa-chart-simple text-blue-400 mr-2"></i>Estoque Consolidado por Operador</h3>
         <div class="h-72"><canvas id="stockChart"></canvas></div>
       </div>
 
-      <div class="lg:col-span-4 bg-card border border-line rounded-2xl p-5 shadow-lg">
+      <div class="lg:col-span-4 bg-card border border-line rounded-2xl p-5">
         <h3 class="font-black text-white mb-4"><i class="fa-solid fa-truck-fast text-amber-400 mr-2"></i>Pipeline do In-Trânsito</h3>
         <div id="pipelineBox" class="space-y-3 text-sm"></div>
       </div>
     </section>
 
-    <!-- PAINEIS DE LEAD TIME COM SLA -->
     <section class="grid grid-cols-1 lg:grid-cols-5 gap-4">
-      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden">
         <div id="bgSeparacao" class="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
         <div class="pl-2">
           <div class="flex justify-between items-start">
@@ -180,7 +175,7 @@
         </div>
       </div>
       
-      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden">
         <div id="bgShrink" class="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
         <div class="pl-2">
           <div class="flex justify-between items-start">
@@ -193,7 +188,7 @@
         </div>
       </div>
 
-      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden">
         <div id="bgTransporte" class="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
         <div class="pl-2">
           <div class="flex justify-between items-start">
@@ -206,7 +201,7 @@
         </div>
       </div>
 
-      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden">
         <div id="bgRecebimento" class="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
         <div class="pl-2">
           <div class="flex justify-between items-start">
@@ -219,7 +214,7 @@
         </div>
       </div>
 
-      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden shadow-lg">
+      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden">
         <div id="bgTotal" class="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
         <div class="pl-2">
           <div class="flex justify-between items-start">
@@ -233,18 +228,18 @@
       </div>
     </section>
 
-    <section class="bg-card border border-line rounded-2xl overflow-hidden shadow-lg">
+    <section class="bg-card border border-line rounded-2xl overflow-hidden">
       <div class="p-5 border-b border-line flex flex-col sm:flex-row justify-between gap-2">
         <div>
           <h3 class="font-black text-white"><i class="fa-solid fa-list text-slate-400 mr-2"></i>Detalhamento de SKUs</h3>
           <p class="text-xs text-slate-400">Planejamento consolidado por SKU</p>
         </div>
-        <p class="text-sm text-slate-300">Total: <span id="skuCount" class="font-bold text-white">0</span> SKUs filtrados</p>
+        <p class="text-sm text-slate-300">Total: <span id="skuCount" class="font-bold text-white">0</span> SKUs</p>
       </div>
 
       <div class="overflow-x-auto max-h-[560px]">
         <table id="dataTable" class="w-full text-sm">
-          <thead class="sticky top-0 bg-slate-950 text-slate-400 uppercase text-xs z-10 shadow">
+          <thead class="sticky top-0 bg-slate-950 text-slate-400 uppercase text-xs z-10">
             <tr>
               <th class="text-left p-3">SKU</th>
               <th class="text-left p-3">Produto / OBS</th>
@@ -267,43 +262,30 @@
   <div id="toastBox" class="fixed top-24 right-5 z-50 space-y-3 w-96 max-w-[calc(100vw-2rem)]"></div>
 
 <script>
-// VARIAVEIS GLOBAIS
 let allSkus = [];
 let filteredSkus = [];
 let transitoRows = [];
 let shrinkRows = [];
 let stockChart = null;
 
-// Layout de colunas esperado na aba PLANEJAMENTO
-const COLS = {
-  lista: 0,
-  operacao: 1,
-  sku: 2,
-  descricao: 3,
-  curva: 4,
-  situacao: 5,
-  paletizacao: 6,
-  cxun: 7,
-  separacao: 8,
-  devolucaoMerco: 9,
-  shrinkSolicitado: 10,
-  shrinkEnviado: 11,
-  finalizado: 12,
-  kitNumerico: 13,
-  demanda: 14,
-  totalFinal: 15,
-  merco: 16,
-  lmx: 17,
-  devintex: 18,
-  palete: 19,
-  unidade: 20,
-  volumes: 21,
-  shrink: 22,
-  kit: 23,
-  atendimento: 24
+// OPÇÕES DOS FILTROS (Sem a opção Meli)
+const filterOptions = {
+  opFilter: { label: 'Operação', options: [{v: 'SHOPEE', t: 'SHOPEE'}, {v: 'MERCADO LIVRE', t: 'MERCADO LIVRE'}] },
+  listaFilter: { label: 'Listas', options: [] }, // Preenchido dinamicamente ao ler o excel
+  atendimentoFilter: { label: 'Atendimento', options: [{v: 'pendente', t: '< 100% (Pendente)'}, {v: 'concluido', t: '100% (Concluído)'}] },
+  shrinkFilter: { label: 'Shrink', options: [{v: 'SIM', t: 'Com Shrink'}, {v: 'NÃO', t: 'Sem Shrink'}] },
+  kitFilter: { label: 'Kit', options: [{v: 'SIM', t: 'É Kit'}, {v: 'NÃO', t: 'Não é Kit'}] },
+  sepFilter: { label: 'Separação', options: [{v: 'sim', t: 'Em Separação'}, {v: 'nao', t: 'Sem Separação'}] }
 };
 
-// UTILITÁRIOS
+let selectedFilters = { opFilter: [], listaFilter: [], atendimentoFilter: [], shrinkFilter: [], kitFilter: [], sepFilter: [] };
+
+const COLS = {
+  lista: 0, operacao: 1, sku: 2, descricao: 3, curva: 4, situacao: 5, paletizacao: 6, cxun: 7, separacao: 8,
+  devolucaoMerco: 9, shrinkSolicitado: 10, shrinkEnviado: 11, finalizado: 12, kitNumerico: 13,
+  demanda: 14, totalFinal: 15, merco: 16, lmx: 17, devintex: 18, palete: 19, unidade: 20, volumes: 21, shrink: 22, kit: 23, atendimento: 24
+};
+
 function normalizeText(value) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
 }
@@ -325,23 +307,18 @@ function parseNumber(value) {
   return isNaN(n) ? 0 : n;
 }
 
-function formatNumber(value) {
-  return Math.round(value || 0).toLocaleString("pt-BR");
-}
-
-function formatPct(value) {
-  return `${Math.round(value || 0)}%`;
-}
+function formatNumber(value) { return Math.round(value || 0).toLocaleString("pt-BR"); }
+function formatPct(value) { return `${Math.round(value || 0)}%`; }
 
 function toast(message, type = "info") {
   const box = document.getElementById("toastBox");
   const color = type === "error" ? "border-rose-500 text-rose-300" : type === "success" ? "border-emerald-500 text-emerald-300" : "border-slate-700 text-slate-300";
   const icon = type === "error" ? "triangle-exclamation" : type === "success" ? "circle-check" : "circle-info";
   const el = document.createElement("div");
-  el.className = `bg-slate-900 border ${color} rounded-xl p-4 shadow-xl text-sm font-bold opacity-90 transition-all duration-300`;
+  el.className = `bg-slate-900 border ${color} rounded-xl p-4 shadow-xl text-sm font-bold`;
   el.innerHTML = `<i class="fa-solid fa-${icon} mr-2"></i>${message}`;
   box.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 5000);
+  setTimeout(() => el.remove(), 5500);
 }
 
 function setStatus(text, color = "text-slate-300") {
@@ -359,9 +336,10 @@ function parseDateValue(value) {
   }
   let s = String(value).trim();
   if (!s || s === "-" || s === "#ERROR!") return null;
+  
   const br = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
   if (br) {
-    const d = Number(br[1]); const m = Number(br[2]) - 1; let y = Number(br[3]);
+    const d = Number(br[1]), m = Number(br[2]) - 1; let y = Number(br[3]);
     if (y < 100) y += 2000;
     if (d < 1 || d > 31 || m < 0 || m > 11 || y < 2000 || y > 2100) return null;
     return new Date(y, m, d);
@@ -378,31 +356,23 @@ function daysBetween(start, end) {
   const startUTC = Date.UTC(s.getFullYear(), s.getMonth(), s.getDate());
   const endUTC = Date.UTC(e.getFullYear(), e.getMonth(), e.getDate());
   const days = Math.round((endUTC - startUTC) / 86400000);
-  if (!Number.isFinite(days) || days < 0 || days > 365) return null;
-  return days;
+  return (!Number.isFinite(days) || days < 0 || days > 365) ? null : days;
 }
 
-function averagePositive(values) {
-  const nums = values.filter(v => typeof v === 'number' && !isNaN(v));
-  if (!nums.length) return 0;
-  return nums.reduce((a, b) => a + b, 0) / nums.length;
-}
-
-// LOGICA DE NEGÓCIO E PARSERS
 function detectHeaderIndex(rows) {
   for (let i = 0; i < Math.min(rows.length, 50); i++) {
     const text = rows[i].map(normalizeText).join("|");
     if (text.includes("LISTA") && text.includes("OPERAC") && (text.includes("SKU") || text.includes("DESCRI"))) return i;
   }
-  return 0; // Fallback
+  return -1;
 }
 
 function parsePlanejamento(rows) {
   const headerIndex = detectHeaderIndex(rows);
-  const dataRows = rows.slice(headerIndex + 1);
+  if (headerIndex < 0) throw new Error("Cabeçalho da aba PLANEJAMENTO não localizado.");
+  
   const parsed = [];
-
-  for (const row of dataRows) {
+  for (const row of rows.slice(headerIndex + 1)) {
     const sku = String(row[COLS.sku] ?? "").trim();
     const lista = String(row[COLS.lista] ?? "").trim();
     if (!sku || !lista || normalizeText(sku) === "SKU") continue;
@@ -415,209 +385,257 @@ function parsePlanejamento(rows) {
     const atendimento = demanda > 0 ? Math.min(100, (finalizado / demanda) * 100) : parseNumber(row[COLS.atendimento]);
 
     parsed.push({
-      lista,
-      operacao: String(row[COLS.operacao] ?? "SHOPEE").trim().toUpperCase(),
-      sku,
-      descricao: String(row[COLS.descricao] ?? "").trim(),
-      curva: String(row[COLS.curva] ?? "C").trim(),
-      situacao: String(row[COLS.situacao] ?? "").trim(),
-      separacao: parseNumber(row[COLS.separacao]),
-      shrinkSolicitado: parseNumber(row[COLS.shrinkSolicitado]),
-      shrinkEnviado: parseNumber(row[COLS.shrinkEnviado]),
-      finalizado,
-      demanda,
-      merco,
-      lmx,
-      devintex,
+      lista, operacao: String(row[COLS.operacao] ?? "SHOPEE").trim().toUpperCase(),
+      sku, descricao: String(row[COLS.descricao] ?? "").trim(),
+      curva: String(row[COLS.curva] ?? "C").trim(), situacao: String(row[COLS.situacao] ?? "").trim(),
+      separacao: parseNumber(row[COLS.separacao]), shrinkSolicitado: parseNumber(row[COLS.shrinkSolicitado]),
+      shrinkEnviado: parseNumber(row[COLS.shrinkEnviado]), finalizado, demanda, merco, lmx, devintex,
       operador: getMainOperator(merco, lmx, devintex),
-      palete: parseNumber(row[COLS.palete]),
-      unidade: parseNumber(row[COLS.unidade]),
-      volumes: parseNumber(row[COLS.volumes]),
       shrink: normalizeText(row[COLS.shrink]).startsWith("S") ? "SIM" : "NÃO",
       kit: normalizeText(row[COLS.kit]).startsWith("S") ? "SIM" : "NÃO",
       atendimento
     });
   }
+  if (!parsed.length) throw new Error("Nenhum SKU válido encontrado na aba PLANEJAMENTO.");
   return parsed;
 }
 
-function getMainOperator(merco, lmx, devintex) {
-  const values = [
-    { name: "MERCOCAMP", value: Math.max(0, parseNumber(merco)) },
-    { name: "LMX", value: Math.max(0, parseNumber(lmx)) },
-    { name: "DEVINTEX", value: Math.max(0, parseNumber(devintex)) }
-  ].sort((a, b) => b.value - a.value);
-  return values[0].value > 0 ? values[0].name : "-";
-}
-
 function parseTransito(rows) {
-  const headerIndex = rows.findIndex(r => r.map(normalizeText).join("|").includes("DATA INPUT"));
+  const headerIndex = rows.findIndex(r => { const text = r.map(normalizeText).join("|"); return text.includes("DATA INPUT") || text.includes("LEAD TIME"); });
   if (headerIndex < 0) return [];
   const header = rows[headerIndex].map(normalizeText);
-  const findIdx = (aliases, fallback) => {
-    const found = header.findIndex(h => aliases.some(a => h.includes(normalizeText(a))));
-    return found >= 0 ? found : fallback;
-  };
+  const findIdx = (aliases, fallback) => { const found = header.findIndex(h => aliases.some(a => h.includes(normalizeText(a)))); return found >= 0 ? found : fallback; };
 
-  const IDX = {
-    dataInput: findIdx(["DATA INPUT", "INPUT"], 0),
-    descricao: findIdx(["DESCRICAO"], 2),
-    qtd: findIdx(["QTD", "QUANTIDADE"], 4),
-    status: findIdx(["STATUS", "SITUACAO"], 7),
-    dataExpedicao: findIdx(["EXPEDICAO"], 11),
-    dataRecebimento: findIdx(["RECEBIMENTO"], 12),
-    ltSeparacao: findIdx(["LT SEPARACAO", "LEAD TIME SEPARACAO"], 14),
-    ltRecebimento: findIdx(["LT RECEBIMENTO"], 15),
-    operador: findIdx(["OPERADOR"], 20),
-    movimentacao: findIdx(["MOVIMENTACAO"], 22)
+  const IDX = { dataInput: findIdx(["DATA INPUT", "INPUT"], 0), qtd: findIdx(["QTD", "QUANTIDADE"], 4), status: findIdx(["STATUS", "SITUACAO"], 7),
+    dataExpedicao: findIdx(["DATA EXPEDICAO", "EXPEDICAO"], 11), dataRecebimento: findIdx(["DATA RECEBIMENTO", "RECEBIMENTO"], 12),
+    ltSeparacao: findIdx(["LEAD TIME SEPARACAO", "LT SEPARACAO"], 14), ltRecebimento: findIdx(["LEAD TIME RECEBIMENTO", "LT RECEBIMENTO"], 15),
+    operador: findIdx(["OPERADOR"], 20)
   };
 
   const today = new Date();
-
   return rows.slice(headerIndex + 1).map(r => {
-    const dInput = parseDateValue(r[IDX.dataInput]);
-    const dExp = parseDateValue(r[IDX.dataExpedicao]);
-    const dRec = parseDateValue(r[IDX.dataRecebimento]);
+    const rawInput = r[IDX.dataInput]; const rawExp = r[IDX.dataExpedicao]; const rawRec = r[IDX.dataRecebimento];
+    const dInput = parseDateValue(rawInput); const dExp = parseDateValue(rawExp); const dRec = parseDateValue(rawRec);
     const statusText = normalizeText(r[IDX.status]);
 
-    let ltSep = parseNumber(r[IDX.ltSeparacao]) || null;
-    if (ltSep === null && dInput) {
-      if (!dExp && statusText.includes("AGUARDANDO")) ltSep = daysBetween(dInput, today);
-      else ltSep = daysBetween(dInput, dExp);
-    }
+    const rawLtSep = String(r[IDX.ltSeparacao] ?? "").trim(); const rawLtRec = String(r[IDX.ltRecebimento] ?? "").trim();
+    const ltSepPlanilha = (rawLtSep !== "" && rawLtSep !== "-") ? parseNumber(rawLtSep) : null;
+    const ltRecPlanilha = (rawLtRec !== "" && rawLtRec !== "-") ? parseNumber(rawLtRec) : null;
 
-    let ltRec = parseNumber(r[IDX.ltRecebimento]) || null;
-    if (ltRec === null && dInput) {
-      if (!dRec && statusText.includes("TRANSITO")) ltRec = daysBetween(dInput, today);
-      else ltRec = daysBetween(dInput, dRec);
-    }
+    let ltSep = ltSepPlanilha;
+    const isPendingSep = statusText.includes("AGUARDANDO") || statusText.includes("SEPARA") || statusText.includes("PENDENTE");
+    
+    // Cálculo do aging do zero
+    if (isPendingSep && !dExp && dInput) ltSep = daysBetween(dInput, today);
+    else if (ltSep === null || (ltSep <= 0 && !dExp)) ltSep = daysBetween(dInput, dExp);
+
+    let ltRec = ltRecPlanilha;
+    const isPendingRec = statusText.includes("TRANSITO") || statusText.includes("TRANSPORTE") || statusText.includes("ENVIADO");
+    
+    if (isPendingRec && !dRec && dInput) ltRec = daysBetween(dInput, today);
+    else if (ltRec === null || (ltRec <= 0 && !dRec)) ltRec = daysBetween(dInput, dRec);
     
     let ltTrans = null;
-    if (!dRec && statusText.includes("TRANSITO")) ltTrans = daysBetween(dExp || dInput, today);
+    if (isPendingRec && !dRec) ltTrans = daysBetween(dExp || dInput, today);
+    else if (ltSepPlanilha !== null && ltRecPlanilha !== null && !isPendingSep && !isPendingRec) ltTrans = Math.max(0, ltRecPlanilha - ltSepPlanilha);
     else ltTrans = daysBetween(dExp, dRec);
 
-    return {
-      status: statusText,
-      qty: parseNumber(r[IDX.qtd]),
-      ltSep, ltTrans, ltRec
-    };
-  }).filter(x => x.status || x.qty || x.ltSep !== null);
+    return { status: statusText, qty: parseNumber(r[IDX.qtd]), ltSep, ltTrans, ltRec };
+  }).filter(x => x.status || x.qty || x.ltSep !== null || x.ltRec !== null);
 }
 
 function parseShrink(rows) {
   const headerIndex = rows.findIndex(r => r.map(normalizeText).join("|").includes("DATA INPUT"));
   if (headerIndex < 0) return [];
   const header = rows[headerIndex].map(normalizeText);
-  const findIdx = (aliases, fallback) => {
-    const found = header.findIndex(h => aliases.some(a => h.includes(normalizeText(a))));
-    return found >= 0 ? found : fallback;
-  };
+  const findIdx = (aliases, fallback) => { const found = header.findIndex(h => aliases.some(a => h.includes(normalizeText(a)))); return found >= 0 ? found : fallback; };
 
-  const IDX = {
-    dataInput: findIdx(["DATA INPUT", "INPUT"], 0),
-    status: findIdx(["STATUS"], 7),
-    dataExpedicao: findIdx(["EXPEDICAO"], 11),
-    dataRecebimento: findIdx(["RECEBIMENTO"], 12),
-    ltSeparacao: findIdx(["LT SEPARACAO"], 14),
-    ltRecebimento: findIdx(["LT RECEBIMENTO"], 15)
+  const IDX = { dataInput: findIdx(["DATA INPUT", "INPUT"], 0), qtd: findIdx(["QTD", "QUANTIDADE"], 4), status: findIdx(["STATUS", "SITUACAO"], 7),
+    dataExpedicao: findIdx(["DATA EXPEDICAO", "EXPEDICAO"], 11), dataRecebimento: findIdx(["DATA RECEBIMENTO", "RECEBIMENTO"], 12),
+    ltSeparacao: findIdx(["LT SEPARACAO"], 14), ltRecebimento: findIdx(["LT RECEBIMENTO"], 15)
   };
 
   const today = new Date();
-
   return rows.slice(headerIndex + 1).map(r => {
-    const dInput = parseDateValue(r[IDX.dataInput]);
-    const dExp = parseDateValue(r[IDX.dataExpedicao]);
-    const dRec = parseDateValue(r[IDX.dataRecebimento]);
-    const status = normalizeText(r[IDX.status]);
+    const rawInput = r[IDX.dataInput]; const rawExp = r[IDX.dataExpedicao]; const rawRec = r[IDX.dataRecebimento];
+    const dInput = parseDateValue(rawInput); const dExp = parseDateValue(rawExp); const dRec = parseDateValue(rawRec);
+    const statusText = normalizeText(r[IDX.status]);
 
-    let ltShrink = parseNumber(r[IDX.ltSeparacao] || r[IDX.ltRecebimento]) || null;
-    if (ltShrink === null && dInput) {
-      if (!dExp && !dRec && (status.includes("AGUARDANDO") || status.includes("PRODUCAO"))) {
-        ltShrink = daysBetween(dInput, today);
-      } else {
-        ltShrink = daysBetween(dInput, dRec || dExp || today);
-      }
+    const rawLtSep = String(r[IDX.ltSeparacao] ?? "").trim(); const rawLtRec = String(r[IDX.ltRecebimento] ?? "").trim();
+    const ltSepPlanilha = (rawLtSep !== "" && rawLtSep !== "-") ? parseNumber(rawLtSep) : null;
+    const ltRecPlanilha = (rawLtRec !== "" && rawLtRec !== "-") ? parseNumber(rawLtRec) : null;
+
+    let ltShrink = ltSepPlanilha !== null ? ltSepPlanilha : ltRecPlanilha;
+    const isPendingShrink = statusText.includes("SOLICITADO") || statusText.includes("AGUARDANDO") || statusText.includes("PRODUÇÃO");
+    
+    if (isPendingShrink && !dExp && !dRec && dInput) ltShrink = daysBetween(dInput, today);
+    else if (ltShrink === null || (ltShrink <= 0 && !dExp && !dRec)) {
+      let endDate = dRec || dExp;
+      if (!endDate && (statusText.includes("ENVIADO") || statusText.includes("SHERINK") || statusText.includes("CONCL"))) endDate = today;
+      ltShrink = daysBetween(dInput, endDate);
     }
-    return { status, ltShrink, qty: 1 };
-  }).filter(x => x.status || x.ltShrink !== null);
+
+    return { status: statusText, qty: parseNumber(r[IDX.qtd]), ltShrink };
+  }).filter(x => x.status || x.ltShrink !== null || x.qty);
 }
 
-// CONEXÃO EXCEL LOCAL (SUBSTITUI GOOGLE SHEETS)
-async function loadAllData() {
+// LÓGICA DE EXCEL LOCAL E RENDERIZAÇÃO
+async function loadDataFromWorkbook(workbook) {
+  const getSheet = (names) => {
+    for (const name of names) {
+      if (workbook.SheetNames.includes(name)) return XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "" });
+    }
+    throw new Error(`Aba não encontrada. Procurado: ${names.join(", ")}`);
+  };
+
   try {
-    setStatus("Baixando Excel Local...", "text-amber-400");
-    toast("Lendo arquivo data.xlsx...", "info");
+    const planRows = getSheet(["PLANEJAMENTO", "Planejamento"]);
+    allSkus = parsePlanejamento(planRows);
 
-    // Faz a requisição HTTP para o próprio repositório para baixar o arquivo
-    const response = await fetch('./data.xlsx');
-    if (!response.ok) throw new Error("Arquivo data.xlsx não encontrado no repositório. Por favor, faça o upload dele.");
-    const arrayBuffer = await response.arrayBuffer();
+    try { transitoRows = parseTransito(getSheet(["IN_TRANSITO", "INTRANSITO", "IN TRANSITO"])); } catch(e) { console.warn(e); transitoRows = []; }
+    try { shrinkRows = parseShrink(getSheet(["PRODUCAO_SHRINK", "PRODUÇÃO_SHRINK", "SHRINK"])); } catch(e) { console.warn(e); shrinkRows = []; }
 
-    // Processa o arquivo Excel binário usando a biblioteca SheetJS
-    const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
-
-    const getSheetData = (sheetNames) => {
-      for (let name of sheetNames) {
-        if (workbook.Sheets[name]) return XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "" });
-      }
-      throw new Error(`Aba necessária não encontrada: ${sheetNames[0]}`);
-    };
-
-    allSkus = parsePlanejamento(getSheetData(["PLANEJAMENTO", "Planejamento"]));
-
-    try { transitoRows = parseTransito(getSheetData(["IN_TRANSITO", "INTRANSITO"])); } catch(e) { transitoRows = []; }
-    try { shrinkRows = parseShrink(getSheetData(["PRODUCAO_SHRINK", "SHRINK"])); } catch(e) { shrinkRows = []; }
-
-    populateListaFilter();
+    // Preenche as listas dinamicamente
+    const lists = [...new Set(allSkus.map(x => x.lista).filter(Boolean))].sort();
+    filterOptions.listaFilter.options = lists.map(l => ({v: l, t: l}));
+    
+    renderFilters();
     applyFilters();
 
-    setStatus("Conectado (data.xlsx)", "text-emerald-400");
-    toast(`${allSkus.length} SKUs processados do Excel.`, "success");
+    setStatus("Conectado (Arquivo)", "text-emerald-400");
+    toast(`${allSkus.length} SKUs carregados com sucesso.`, "success");
   } catch (err) {
     console.error(err);
-    setStatus("Arquivo Ausente", "text-rose-400");
+    setStatus("Erro ao Ler", "text-rose-400");
     toast(err.message, "error");
   }
 }
 
-// INTERFACE E ATUALIZAÇÃO
-function populateListaFilter() {
-  const select = document.getElementById("listaFilter");
-  const current = select.value;
-  const lists = [...new Set(allSkus.map(x => x.lista).filter(Boolean))].sort();
-  select.innerHTML = `<option value="">Listas: Todas</option>`;
-  for (const lista of lists) {
-    const opt = document.createElement("option"); opt.value = lista; opt.textContent = lista; select.appendChild(opt);
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  setStatus("Lendo Arquivo...", "text-amber-400");
+  toast("Processando o arquivo local...", "info");
+  
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const data = new Uint8Array(evt.target.result);
+    const workbook = XLSX.read(data, {type: 'array', cellDates: true});
+    loadDataFromWorkbook(workbook);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Tenta achar o data.xlsx auto via GitHub pages
+async function tryAutoLoad() {
+  try {
+    const res = await fetch('data.xlsx');
+    if (res.ok) {
+       setStatus("Carregando data.xlsx...", "text-amber-400");
+       const buffer = await res.arrayBuffer();
+       const workbook = XLSX.read(buffer, {type: 'array', cellDates: true});
+       loadDataFromWorkbook(workbook);
+    }
+  } catch(e) { console.log("Sem leitura automática. Aguardando upload."); }
+}
+
+// RENDERIZADOR DE DROPDOWNS MULTI-SELEÇÃO
+function renderFilters() {
+  const container = document.getElementById('filtersContainer');
+  container.innerHTML = '';
+  for(const [id, def] of Object.entries(filterOptions)) {
+    container.innerHTML += `
+      <div class="relative filter-container">
+        <button id="btn-${id}" onclick="toggleDropdown('${id}')" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm text-left flex justify-between items-center transition-colors text-slate-300">
+          <span id="label-${id}" class="truncate pr-2">${def.label}: Todas</span>
+          <i class="fa-solid fa-chevron-down text-slate-500 text-xs"></i>
+        </button>
+        <div id="dropdown-${id}" class="hidden filter-dropdown absolute z-50 w-full mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-h-60 overflow-y-auto p-2">
+          ${def.options.map(opt => `
+            <label class="flex items-center space-x-3 p-2 hover:bg-slate-800 rounded cursor-pointer">
+              <input type="checkbox" class="form-checkbox" onchange="toggleFilterSelection('${id}', '${opt.v}')" ${selectedFilters[id].includes(opt.v) ? 'checked' : ''}>
+              <span class="text-sm text-slate-300">${opt.t}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    `;
   }
-  if (lists.includes(current)) select.value = current;
+}
+
+function toggleDropdown(id) {
+  const dropdown = document.getElementById(`dropdown-${id}`);
+  const wasHidden = dropdown.classList.contains('hidden');
+  document.querySelectorAll('.filter-dropdown').forEach(d => d.classList.add('hidden'));
+  if (wasHidden) dropdown.classList.remove('hidden');
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.filter-container')) document.querySelectorAll('.filter-dropdown').forEach(d => d.classList.add('hidden'));
+});
+
+function toggleFilterSelection(id, value) {
+  const arr = selectedFilters[id];
+  const index = arr.indexOf(value);
+  if (index > -1) arr.splice(index, 1);
+  else arr.push(value);
+  
+  const count = arr.length;
+  const btn = document.getElementById(`btn-${id}`);
+  const label = document.getElementById(`label-${id}`);
+  
+  if (count === 0) {
+    label.textContent = `${filterOptions[id].label}: Todas`;
+    btn.classList.remove('bg-indigo-600', 'border-indigo-500', 'text-white');
+    btn.classList.add('bg-slate-950', 'border-slate-700', 'text-slate-300');
+  } else {
+    label.textContent = `${filterOptions[id].label} (${count})`;
+    btn.classList.remove('bg-slate-950', 'border-slate-700', 'text-slate-300');
+    btn.classList.add('bg-indigo-600', 'border-indigo-500', 'text-white');
+  }
+  applyFilters();
 }
 
 function applyFilters() {
   const q = normalizeText(document.getElementById("searchInput").value);
-  const op = document.getElementById("opFilter").value;
-  const lista = document.getElementById("listaFilter").value;
-  const atendimento = document.getElementById("atendimentoFilter").value;
-  const shrink = document.getElementById("shrinkFilter").value;
-  const kit = document.getElementById("kitFilter").value;
-  const sep = document.getElementById("sepFilter").value;
+  const op = selectedFilters.opFilter;
+  const lista = selectedFilters.listaFilter;
+  const atendimento = selectedFilters.atendimentoFilter;
+  const shrink = selectedFilters.shrinkFilter;
+  const kit = selectedFilters.kitFilter;
+  const sep = selectedFilters.sepFilter;
 
   filteredSkus = allSkus.filter(item => {
     if (q && !normalizeText(item.sku + " " + item.descricao).includes(q)) return false;
-    if (op && item.operacao !== op && !(op === "MELI" && item.operacao.includes("MERCADO"))) return false;
-    if (lista && item.lista !== lista) return false;
-    if (atendimento === "pendente" && item.atendimento >= 100) return false;
-    if (atendimento === "concluido" && item.atendimento < 100) return false;
-    if (shrink && item.shrink !== shrink) return false;
-    if (kit && item.kit !== kit) return false;
-    if (sep === "sim" && item.separacao <= 0) return false;
-    if (sep === "nao" && item.separacao > 0) return false;
+    if (op.length > 0 && !op.includes(item.operacao)) return false;
+    if (lista.length > 0 && !lista.includes(item.lista)) return false;
+    
+    if (atendimento.length > 0) {
+      const isConcluido = item.atendimento >= 100;
+      if (!atendimento.some(val => (val === 'concluido' && isConcluido) || (val === 'pendente' && !isConcluido))) return false;
+    }
+    
+    if (shrink.length > 0 && !shrink.includes(item.shrink)) return false;
+    if (kit.length > 0 && !kit.includes(item.kit)) return false;
+    
+    if (sep.length > 0) {
+      const hasSep = item.separacao > 0;
+      if (!sep.some(val => (val === 'sim' && hasSep) || (val === 'nao' && !hasSep))) return false;
+    }
     return true;
   });
-
   updateDashboard();
 }
 
-function sum(arr, field) { return arr.reduce((acc, x) => acc + (x[field] || 0), 0); }
+// EXPORTAR PARA EXCEL
+function exportToExcel() {
+  const table = document.getElementById("dataTable");
+  if (!table || filteredSkus.length === 0) return toast("Sem dados para exportar.", "error");
+  const wb = XLSX.utils.table_to_book(table, {sheet: "Dashboard Export"});
+  XLSX.writeFile(wb, "Exportacao_Supply_Control.xlsx");
+}
+
+function sum(arr, field) { return arr.reduce((acc, x) => acc + parseNumber(x[field]), 0); }
 
 function getConsolidatedStock(items) {
   const bySku = new Map();
@@ -626,13 +644,24 @@ function getConsolidatedStock(items) {
     if (!key) continue;
     if (!bySku.has(key)) bySku.set(key, { merco: 0, lmx: 0, devintex: 0 });
     const current = bySku.get(key);
-    current.merco = Math.max(current.merco, Math.max(0, item.merco));
-    current.lmx = Math.max(current.lmx, Math.max(0, item.lmx));
-    current.devintex = Math.max(current.devintex, Math.max(0, item.devintex));
+    current.merco = Math.max(current.merco, Math.max(0, parseNumber(item.merco)));
+    current.lmx = Math.max(current.lmx, Math.max(0, parseNumber(item.lmx)));
+    current.devintex = Math.max(current.devintex, Math.max(0, parseNumber(item.devintex)));
   }
   const result = { merco: 0, lmx: 0, devintex: 0 };
   for (const stock of bySku.values()) { result.merco += stock.merco; result.lmx += stock.lmx; result.devintex += stock.devintex; }
   return result;
+}
+
+function getMainOperator(merco, lmx, devintex) {
+  const values = [{ name: "MERCOCAMP", value: Math.max(0, parseNumber(merco)) }, { name: "LMX", value: Math.max(0, parseNumber(lmx)) }, { name: "DEVINTEX", value: Math.max(0, parseNumber(devintex)) }].sort((a, b) => b.value - a.value);
+  return values[0].value > 0 ? values[0].name : "-";
+}
+
+function averagePositive(values) {
+  const nums = values.filter(v => typeof v === 'number' && !isNaN(v));
+  if (!nums.length) return 0;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
 function updateDashboard() {
@@ -651,45 +680,50 @@ function updateDashboard() {
   document.getElementById("skuCount").textContent = formatNumber(filteredSkus.length);
 
   const stock = getConsolidatedStock(filteredSkus);
-  document.getElementById("kpiEstoqueTotal").textContent = formatNumber(stock.merco + stock.lmx + stock.devintex);
-  document.getElementById("kpiRupturaSku").textContent = formatNumber(filteredSkus.filter(item => item.demanda > (Math.max(0, item.merco) + Math.max(0, item.lmx) + Math.max(0, item.devintex))).length);
+  const estoqueTotal = stock.merco + stock.lmx + stock.devintex;
+  const rupturaSku = filteredSkus.filter(item => {
+    const estoqueItem = Math.max(0, item.merco) + Math.max(0, item.lmx) + Math.max(0, item.devintex);
+    return item.demanda > estoqueItem;
+  }).length;
 
-  updateStockChart(stock);
-  updatePipeline(totalDemanda, totalFinalizado);
+  document.getElementById("kpiEstoqueTotal").textContent = formatNumber(estoqueTotal);
+  document.getElementById("kpiRupturaSku").textContent = formatNumber(rupturaSku);
+
+  updateStockChart();
+  updatePipeline();
   updateLeadTimes();
   renderTable();
 }
 
-function updateStockChart(stock) {
+function updateStockChart() {
+  const stock = getConsolidatedStock(filteredSkus);
+  const data = [stock.devintex, stock.merco, stock.lmx];
   const ctx = document.getElementById("stockChart");
   if (stockChart) stockChart.destroy();
   stockChart = new Chart(ctx, {
     type: "bar",
-    data: {
-      labels: ["DEVINTEX", "MERCOCAMP", "LMX"],
-      datasets: [{ label: "Estoque disponível", data: [stock.devintex, stock.merco, stock.lmx], backgroundColor: ["#3B82F6", "#10B981", "#8B5CF6"], borderRadius: 10 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: "#CBD5E1" } } },
-      scales: { x: { ticks: { color: "#CBD5E1" }, grid: { color: "#1E293B" } }, y: { ticks: { color: "#CBD5E1" }, grid: { color: "#1E293B" } } }
-    }
+    data: { labels: ["DEVINTEX", "MERCOCAMP", "LMX"], datasets: [{ label: "Estoque disponível", data, backgroundColor: ["#3B82F6", "#10B981", "#8B5CF6"], borderRadius: 10 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "#CBD5E1" } } }, scales: { x: { ticks: { color: "#CBD5E1" }, grid: { color: "#1E293B" } }, y: { ticks: { color: "#CBD5E1" }, grid: { color: "#1E293B" }, beginAtZero: true } } }
   });
 }
 
-function updatePipeline(demanda, finalizado) {
+function updatePipeline() {
   const box = document.getElementById("pipelineBox");
+  const demanda = sum(filteredSkus, "demanda");
+  const finalizado = sum(filteredSkus, "finalizado");
+
   const groups = {
-    "DEMANDA TOTAL": demanda, "FINALIZADO": finalizado,
+    "DEMANDA TOTAL": demanda,
+    "FINALIZADO": finalizado,
     "AGUARDANDO SEPARAÇÃO": sum(filteredSkus, "separacao"),
     "SHERINK ENVIADO": sum(filteredSkus, "shrinkEnviado"),
     "PENDENTE": Math.max(0, demanda - finalizado),
-    "DEVOLUÇÃO / CORTE": transitoRows.filter(x => x.status.includes("DEVOL") || x.status.includes("CORTE")).reduce((acc, x) => acc + x.qty, 0)
+    "DEVOLUÇÃO / CORTE": transitoRows.filter(x => x.status.includes("DEVOL") || x.status.includes("CORTE") || x.status.includes("SEM ESTOQUE")).reduce((acc, x) => acc + x.qty, 0)
   };
   box.innerHTML = Object.entries(groups).map(([name, qty]) => `
     <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border border-slate-800">
       <span class="text-slate-300 font-bold">${name}</span>
-      <span class="text-white font-black">${formatNumber(qty)}</span>
+      <span class="text-white font-black">${formatNumber(qty)} <small class="text-slate-500">un</small></span>
     </div>
   `).join("");
 }
@@ -699,35 +733,46 @@ function updateLeadTimes() {
   const ltTrans = averagePositive(transitoRows.map(x => x.ltTrans));
   const ltRec = averagePositive(transitoRows.map(x => x.ltRec));
   const ltShrink = averagePositive(shrinkRows.map(x => x.ltShrink));
-  
+  const ltTotal = ltSep + ltShrink + ltTrans;
+
   const setSlaUI = (id, value, meta) => {
-    document.getElementById(`lt${id}`).innerHTML = `${(value || 0).toFixed(1).replace(".", ",")}<span class="text-sm font-normal text-slate-400 ml-1">dias</span>`;
-    const badge = document.getElementById(`badge${id}`); const bar = document.getElementById(`bar${id}`);
-    const bg = document.getElementById(`bg${id}`); const text = document.getElementById(`lt${id}`);
-    if (!badge) return;
+    const text = document.getElementById(`lt${id}`), badge = document.getElementById(`badge${id}`), bar = document.getElementById(`bar${id}`), bg = document.getElementById(`bg${id}`);
+    if (!badge || !bar || !bg) return;
+    text.innerHTML = `${(value || 0).toFixed(1).replace(".", ",")}<span class="text-sm font-normal text-slate-400 ml-1">dias</span>`;
     bar.style.width = `${Math.min(100, (value / (meta * 1.5)) * 100)}%`;
 
-    if (value === 0) { badge.textContent = "-"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400"; bar.className = "bg-slate-600 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-slate-700"; text.className = "text-3xl font-black text-slate-300 mt-2"; }
-    else if (value <= meta) { badge.textContent = "NO PRAZO"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400"; bar.className = "bg-emerald-500 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-emerald-500"; text.className = "text-3xl font-black text-white mt-2"; }
-    else if (value <= meta * 1.5) { badge.textContent = "ATENÇÃO"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400"; bar.className = "bg-amber-500 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-amber-500"; text.className = "text-3xl font-black text-white mt-2"; }
-    else { badge.textContent = "CRÍTICO"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400"; bar.className = "bg-rose-500 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-rose-500"; text.className = "text-3xl font-black text-white mt-2"; }
+    if (value === 0) {
+       badge.textContent = "-"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-bold";
+       bar.className = "bg-slate-600 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-slate-700"; text.className = "text-3xl font-black text-slate-300 mt-2";
+    } else if (value <= meta) {
+       badge.textContent = "NO PRAZO"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold";
+       bar.className = "bg-emerald-500 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-emerald-500"; text.className = "text-3xl font-black text-white mt-2";
+    } else if (value <= meta * 1.5) {
+       badge.textContent = "ATENÇÃO"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold";
+       bar.className = "bg-amber-500 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-amber-500"; text.className = "text-3xl font-black text-white mt-2";
+    } else {
+       badge.textContent = "CRÍTICO"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 font-bold";
+       bar.className = "bg-rose-500 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-rose-500"; text.className = "text-3xl font-black text-white mt-2";
+    }
   };
 
-  setSlaUI('Separacao', ltSep, 1.0); setSlaUI('Shrink', ltShrink, 1.0);
-  setSlaUI('Transporte', ltTrans, 2.0); setSlaUI('Recebimento', ltRec, 1.0);
-  setSlaUI('Total', ltSep + ltShrink + ltTrans, 5.0);
+  setSlaUI('Separacao', ltSep, 1.0); setSlaUI('Shrink', ltShrink, 1.0); setSlaUI('Transporte', ltTrans, 2.0); setSlaUI('Recebimento', ltRec, 1.0); setSlaUI('Total', ltTotal, 5.0);
 }
 
 function renderTable() {
   const tbody = document.getElementById("skuTable");
-  const rows = filteredSkus.slice(0, 500);
+  const rows = filteredSkus.slice(0, 700);
   if (!rows.length) { tbody.innerHTML = `<tr><td colspan="10" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
+
   tbody.innerHTML = rows.map(item => `
     <tr class="hover:bg-slate-800/50">
       <td class="p-3 font-bold text-white">${item.sku}</td>
       <td class="p-3 min-w-[360px]">
         <div class="font-semibold text-slate-100">${item.descricao}</div>
-        <div class="mt-1 flex gap-2 text-[11px]">${item.shrink === "SIM" ? '<span class="px-2 rounded bg-violet-500/20 text-violet-300">SHRINK</span>' : ''}${item.kit === "SIM" ? '<span class="px-2 rounded bg-cyan-500/20 text-cyan-300">KIT</span>' : ''}</div>
+        <div class="mt-1 flex flex-wrap gap-2 text-[11px]">
+          ${item.shrink === "SIM" ? '<span class="px-2 py-0.5 rounded bg-violet-500/20 text-violet-300 font-bold border border-violet-500/30">COM SHRINK</span>' : ''}
+          ${item.kit === "SIM" ? '<span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30">KIT</span>' : ''}
+        </div>
       </td>
       <td class="p-3 text-slate-300 font-bold">${item.lista}</td>
       <td class="p-3 text-slate-300">${item.operador}</td>
@@ -741,44 +786,7 @@ function renderTable() {
   `).join("");
 }
 
-// FUNÇÃO PARA EXPORTAR EXCEL GERADO PELO NAVEGADOR
-function exportToExcel() {
-  toast("Gerando Excel...", "info");
-  
-  // Mapeia os dados filtrados para o formato que vai pro Excel
-  const excelData = filteredSkus.map(item => ({
-    "Lista": item.lista,
-    "Operação": item.operacao,
-    "SKU": item.sku,
-    "Descrição": item.descricao,
-    "Curva": item.curva,
-    "Operador Principal": item.operador,
-    "Requer Shrink?": item.shrink,
-    "É Kit?": item.kit,
-    "Demanda Total": item.demanda,
-    "Finalizado": item.finalizado,
-    "Atendimento %": item.atendimento,
-    "Aguardando Separação": item.separacao,
-    "Shrink Enviado": item.shrinkEnviado,
-    "Estoque Merco": item.merco,
-    "Estoque LMX": item.lmx,
-    "Estoque Devintex": item.devintex
-  }));
-
-  // Cria o arquivo virtual
-  const worksheet = XLSX.utils.json_to_sheet(excelData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Painel Filtrado");
-
-  // Ajusta o tamanho das colunas automaticamente
-  worksheet['!cols'] = [ {wch:15}, {wch:15}, {wch:15}, {wch:45}, {wch:10}, {wch:20}, {wch:15}, {wch:10}, {wch:15}, {wch:15}, {wch:15}, {wch:20}, {wch:15}, {wch:15}, {wch:15}, {wch:15} ];
-
-  // Dispara o download
-  XLSX.writeFile(workbook, "Relatorio_Supply_Control.xlsx", { compression: true });
-  toast("Download concluído!", "success");
-}
-
-window.addEventListener("load", loadAllData);
+window.addEventListener('load', () => { renderFilters(); tryAutoLoad(); });
 </script>
 </body>
 </html>

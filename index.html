@@ -612,8 +612,13 @@ function applyFilters() {
     if (op.length > 0 && !op.includes(item.operacao)) return false;
     if (lista.length > 0 && !lista.includes(item.lista)) return false;
     
-    // Regra de operador simplificada e estrita: só mostra se o Operador Principal for o selecionado
-    if (operador.length > 0 && !operador.includes(item.operador)) return false;
+    // Regra de operador inclusiva: mostra se o Operador Principal for o selecionado OU se houver saldo (positivo ou negativo) no operador
+    if (operador.length > 0) {
+      const matchMerco = operador.includes("MERCOCAMP") && item.merco !== 0;
+      const matchLmx = operador.includes("LMX") && item.lmx !== 0;
+      const matchDev = operador.includes("DEVINTEX") && item.devintex !== 0;
+      if (!matchMerco && !matchLmx && !matchDev && !operador.includes(item.operador)) return false;
+    }
     
     if (atendimento.length > 0) {
       const isConcluido = item.atendimento >= 100;
@@ -728,11 +733,6 @@ function updatePipeline() {
   const finalizado = sum(filteredSkus, "finalizado");
   const separacaoTotal = sum(filteredSkus, "separacao");
 
-  // Soma a separação (aba Planejamento) filtrando estritamente os SKUs onde o operador é a LMX
-  const separacaoLMX = filteredSkus
-    .filter(s => s.operador === 'LMX')
-    .reduce((acc, s) => acc + s.separacao, 0);
-
   const activeSkus = new Set(filteredSkus.map(s => normalizeText(s.sku)));
   const hasFilters = filteredSkus.length < allSkus.length;
 
@@ -745,8 +745,7 @@ function updatePipeline() {
   const groups = {
     "DEMANDA TOTAL": demanda,
     "FINALIZADO": finalizado,
-    "AGUARDANDO SEPARAÇÃO": separacaoTotal,
-    "SEPARAÇÃO LMX": separacaoLMX,
+    "SEPARAÇÃO LMX": separacaoTotal,
     "SHERINK ENVIADO": sum(filteredSkus, "shrinkEnviado"),
     "PENDENTE (Ruptura)": Math.max(0, demanda - finalizado),
     "DEVOLUÇÃO / CORTE": devolucaoCorte

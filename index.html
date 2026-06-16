@@ -388,14 +388,44 @@ function parsePlanejamento(rows) {
   
   const opIdx = findIdx(["OPERADOR LOGISTICO", "OPERADOR LOGÍSTICO", "OPERADOR"], -1);
 
+  const findExactOrFallback = (predicate, fallback) => {
+    const found = header.findIndex(predicate);
+    return found >= 0 ? found : fallback;
+  };
+
+  const idxShrinkSolicitado = findExactOrFallback(h =>
+    (h.includes("SHERINK") || h.includes("SHRINK")) && h.includes("SOLICITADO"),
+    COLS.shrinkSolicitado
+  );
+
+  const idxShrinkEnviado = findExactOrFallback(h =>
+    (h.includes("SHERINK") || h.includes("SHRINK")) && h.includes("ENVIADO"),
+    COLS.shrinkEnviado
+  );
+
+  const idxSeparacao = findExactOrFallback(h =>
+    h.includes("AGUARDANDO") && h.includes("SEPARACAO"),
+    COLS.separacao
+  );
+
+  const idxFinalizado = findExactOrFallback(h =>
+    h === "FINALIZADO" || h.includes("FINALIZADO"),
+    COLS.finalizado
+  );
+
+  const idxDemanda = findExactOrFallback(h =>
+    h.includes("TOTAL LISTA") || h === "TOTALISTA" || h.includes("TOTALLISTA"),
+    COLS.demanda
+  );
+
   const parsed = [];
   for (const row of rows.slice(headerIndex + 1)) {
     const sku = String(row[COLS.sku] ?? "").trim();
     const lista = String(row[COLS.lista] ?? "").trim();
     if (!sku || !lista || normalizeText(sku) === "SKU") continue;
 
-    const demanda = parseNumber(row[COLS.demanda]);          
-    const finalizado = parseNumber(row[COLS.finalizado]);    
+    const demanda = parseNumber(row[idxDemanda]);          
+    const finalizado = parseNumber(row[idxFinalizado]);    
     const merco = parseNumber(row[COLS.merco]);              
     const lmx = parseNumber(row[COLS.lmx]);                  
     const devintex = parseNumber(row[COLS.devintex]);        
@@ -415,14 +445,23 @@ function parsePlanejamento(rows) {
       lista, operacao: String(row[COLS.operacao] ?? "SHOPEE").trim().toUpperCase(),
       sku, descricao: String(row[COLS.descricao] ?? "").trim(),
       curva: String(row[COLS.curva] ?? "C").trim(), situacao: String(row[COLS.situacao] ?? "").trim(),
-      separacao: parseNumber(row[COLS.separacao]), shrinkSolicitado: parseNumber(row[COLS.shrinkSolicitado]),
-      shrinkEnviado: parseNumber(row[COLS.shrinkEnviado]), finalizado, demanda, merco, lmx, devintex,
+      separacao: parseNumber(row[idxSeparacao]), shrinkSolicitado: parseNumber(row[idxShrinkSolicitado]),
+      shrinkEnviado: parseNumber(row[idxShrinkEnviado]), finalizado, demanda, merco, lmx, devintex,
       operador: operador,
       shrink: normalizeText(row[COLS.shrink]).startsWith("S") ? "SIM" : "NÃO",
       kit: normalizeText(row[COLS.kit]).startsWith("S") ? "SIM" : "NÃO",
       atendimento
     });
   }
+  console.log("Colunas usadas no PLANEJAMENTO:", {
+    idxSeparacao,
+    idxShrinkSolicitado,
+    idxShrinkEnviado,
+    idxFinalizado,
+    idxDemanda,
+    headerShrinkSolicitado: header[idxShrinkSolicitado],
+    headerShrinkEnviado: header[idxShrinkEnviado]
+  });
   if (!parsed.length) throw new Error("Nenhum SKU válido encontrado na aba PLANEAMENTO.");
   return parsed;
 }

@@ -30,7 +30,6 @@
     ::-webkit-scrollbar-track { background:#0f172a; }
     ::-webkit-scrollbar-thumb { background:#475569; border-radius: 4px; }
     
-    /* Estilos customizados para os checkboxes */
     .form-checkbox {
       appearance: none;
       background-color: #0f172a;
@@ -82,7 +81,6 @@
           <i class="fa-solid fa-file-excel mr-2"></i>Exportar
         </button>
 
-        <!-- Botão oficial de leitura Local Offline -->
         <input type="file" id="excelUpload" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)">
         <label for="excelUpload" class="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg cursor-pointer flex items-center">
           <i class="fa-solid fa-upload mr-2"></i>Carregar Excel
@@ -137,14 +135,13 @@
       </div>
     </section>
 
-    <!-- PAINEL DE FILTROS COM MULTI-SELEÇÃO -->
     <section class="bg-card border border-line rounded-2xl p-5">
       <div class="flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between mb-4">
         <h3 class="font-black text-white"><i class="fa-solid fa-filter text-indigo-400 mr-2"></i>Filtros</h3>
         <input id="searchInput" oninput="applyFilters()" placeholder="Pesquisar por SKU ou Descrição..." class="w-full lg:w-96 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 text-white">
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3" id="filtersContainer">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3" id="filtersContainer">
         <!-- Renderizado pelo JavaScript -->
       </div>
     </section>
@@ -270,10 +267,10 @@ let transitoRows = [];
 let shrinkRows = [];
 let stockChart = null;
 
-// OPÇÕES DOS FILTROS (Sem a opção Meli)
+// OPÇÕES DOS FILTROS (Com Operador Incluído)
 const filterOptions = {
   opFilter: { label: 'Operação', options: [{v: 'SHOPEE', t: 'SHOPEE'}, {v: 'MERCADO LIVRE', t: 'MERCADO LIVRE'}] },
-  listaFilter: { label: 'Listas', options: [] }, // Preenchido dinamicamente ao ler o excel
+  listaFilter: { label: 'Listas', options: [] }, // Preenchido dinamicamente
   operadorFilter: { label: 'Operador', options: [{v: 'MERCOCAMP', t: 'MERCOCAMP'}, {v: 'LMX', t: 'LMX'}, {v: 'DEVINTEX', t: 'DEVINTEX'}] },
   atendimentoFilter: { label: 'Atendimento', options: [{v: 'pendente', t: '< 100% (Pendente)'}, {v: 'concluido', t: '100% (Concluído)'}] },
   shrinkFilter: { label: 'Shrink', options: [{v: 'SIM', t: 'Com Shrink'}, {v: 'NÃO', t: 'Sem Shrink'}] },
@@ -409,7 +406,7 @@ function parseTransito(rows) {
   const header = rows[headerIndex].map(normalizeText);
   const findIdx = (aliases, fallback) => { const found = header.findIndex(h => aliases.some(a => h.includes(normalizeText(a)))); return found >= 0 ? found : fallback; };
 
-  const IDX = { dataInput: findIdx(["DATA INPUT", "INPUT"], 0), qtd: findIdx(["QTD", "QUANTIDADE"], 4), status: findIdx(["STATUS", "SITUACAO"], 7),
+  const IDX = { dataInput: findIdx(["DATA INPUT", "INPUT"], 0), sku: findIdx(["SKU", "CÓDIGO", "CODIGO", "PRODUTO"], 1), qtd: findIdx(["QTD", "QUANTIDADE"], 4), status: findIdx(["STATUS", "SITUACAO"], 7),
     dataExpedicao: findIdx(["DATA EXPEDICAO", "EXPEDICAO"], 11), dataRecebimento: findIdx(["DATA RECEBIMENTO", "RECEBIMENTO"], 12),
     ltSeparacao: findIdx(["LEAD TIME SEPARACAO", "LT SEPARACAO"], 14), ltRecebimento: findIdx(["LEAD TIME RECEBIMENTO", "LT RECEBIMENTO"], 15),
     operador: findIdx(["OPERADOR"], 20)
@@ -428,7 +425,6 @@ function parseTransito(rows) {
     let ltSep = ltSepPlanilha;
     const isPendingSep = statusText.includes("AGUARDANDO") || statusText.includes("SEPARA") || statusText.includes("PENDENTE");
     
-    // Cálculo do aging do zero
     if (isPendingSep && !dExp && dInput) ltSep = daysBetween(dInput, today);
     else if (ltSep === null || (ltSep <= 0 && !dExp)) ltSep = daysBetween(dInput, dExp);
 
@@ -443,7 +439,12 @@ function parseTransito(rows) {
     else if (ltSepPlanilha !== null && ltRecPlanilha !== null && !isPendingSep && !isPendingRec) ltTrans = Math.max(0, ltRecPlanilha - ltSepPlanilha);
     else ltTrans = daysBetween(dExp, dRec);
 
-    return { status: statusText, qty: parseNumber(r[IDX.qtd]), ltSep, ltTrans, ltRec };
+    let operador = normalizeText(r[IDX.operador]);
+    if (operador.includes("MERCO")) operador = "MERCOCAMP";
+    else if (operador.includes("DEVINTEX")) operador = "DEVINTEX";
+    else if (operador.includes("LMX")) operador = "LMX";
+
+    return { status: statusText, sku: r[IDX.sku] ? String(r[IDX.sku]).trim() : "", operador, qty: parseNumber(r[IDX.qtd]), ltSep, ltTrans, ltRec };
   }).filter(x => x.status || x.qty || x.ltSep !== null || x.ltRec !== null);
 }
 
@@ -498,7 +499,6 @@ async function loadDataFromWorkbook(workbook) {
     try { transitoRows = parseTransito(getSheet(["IN_TRANSITO", "INTRANSITO", "IN TRANSITO"])); } catch(e) { console.warn(e); transitoRows = []; }
     try { shrinkRows = parseShrink(getSheet(["PRODUCAO_SHRINK", "PRODUÇÃO_SHRINK", "SHRINK"])); } catch(e) { console.warn(e); shrinkRows = []; }
 
-    // Preenche as listas dinamicamente
     const lists = [...new Set(allSkus.map(x => x.lista).filter(Boolean))].sort();
     filterOptions.listaFilter.options = lists.map(l => ({v: l, t: l}));
     
@@ -529,7 +529,6 @@ function handleFileUpload(e) {
   reader.readAsArrayBuffer(file);
 }
 
-// Tenta achar o data.xlsx auto via GitHub pages
 async function tryAutoLoad() {
   try {
     const res = await fetch('data.xlsx');
@@ -542,7 +541,6 @@ async function tryAutoLoad() {
   } catch(e) { console.log("Sem leitura automática. Aguardando upload."); }
 }
 
-// RENDERIZADOR DE DROPDOWNS MULTI-SELEÇÃO
 function renderFilters() {
   const container = document.getElementById('filtersContainer');
   container.innerHTML = '';
@@ -613,7 +611,13 @@ function applyFilters() {
     if (q && !normalizeText(item.sku + " " + item.descricao).includes(q)) return false;
     if (op.length > 0 && !op.includes(item.operacao)) return false;
     if (lista.length > 0 && !lista.includes(item.lista)) return false;
-    if (operador.length > 0 && !operador.includes(item.operador)) return false;
+    
+    if (operador && operador.length > 0) {
+      const matchMerco = operador.includes("MERCOCAMP") && item.merco > 0;
+      const matchLmx = operador.includes("LMX") && item.lmx > 0;
+      const matchDev = operador.includes("DEVINTEX") && item.devintex > 0;
+      if (!matchMerco && !matchLmx && !matchDev && !operador.includes(item.operador)) return false;
+    }
     
     if (atendimento.length > 0) {
       const isConcluido = item.atendimento >= 100;
@@ -632,7 +636,6 @@ function applyFilters() {
   updateDashboard();
 }
 
-// EXPORTAR PARA EXCEL
 function exportToExcel() {
   const table = document.getElementById("dataTable");
   if (!table || filteredSkus.length === 0) return toast("Sem dados para exportar.", "error");
@@ -687,12 +690,9 @@ function updateDashboard() {
   const stock = getConsolidatedStock(filteredSkus);
   const estoqueTotal = stock.merco + stock.lmx + stock.devintex;
   const rupturaSku = filteredSkus.filter(item => {
-    // Calcula o que realmente falta atender para este SKU
-    const pendente = Math.max(0, item.demanda - item.finalizado);
+    if (item.demanda <= item.finalizado) return false;
     const estoqueItem = Math.max(0, item.merco) + Math.max(0, item.lmx) + Math.max(0, item.devintex);
-    
-    // Só é ruptura se AINDA falta algo E esse algo é maior que o estoque disponível
-    return pendente > 0 && pendente > estoqueItem;
+    return (item.demanda - item.finalizado) > estoqueItem;
   }).length;
 
   document.getElementById("kpiEstoqueTotal").textContent = formatNumber(estoqueTotal);
@@ -720,23 +720,37 @@ function updatePipeline() {
   const box = document.getElementById("pipelineBox");
   const demanda = sum(filteredSkus, "demanda");
   const finalizado = sum(filteredSkus, "finalizado");
+  const separacaoTotal = sum(filteredSkus, "separacao");
 
-  // Filtra as quantidades de separação especificamente para LMX e o restante
-  const separacaoLMX = filteredSkus.filter(item => item.operador === 'LMX').reduce((acc, item) => acc + item.separacao, 0);
-  const separacaoOutros = filteredSkus.filter(item => item.operador !== 'LMX').reduce((acc, item) => acc + item.separacao, 0);
+  const activeSkus = new Set(filteredSkus.map(s => normalizeText(s.sku)));
+  const hasFilters = filteredSkus.length < allSkus.length;
+
+  const separacaoLMXTransito = transitoRows.filter(x => {
+    const isLmx = x.operador === 'LMX';
+    const isSep = x.status.includes("AGUARDANDO") || x.status.includes("SEPARA") || x.status.includes("PENDENTE");
+    const skuMatch = x.sku ? activeSkus.has(normalizeText(x.sku)) : !hasFilters;
+    return isLmx && isSep && skuMatch;
+  }).reduce((acc, x) => acc + x.qty, 0);
+
+  const devolucaoCorte = transitoRows.filter(x => {
+    const isDevol = x.status.includes("DEVOL") || x.status.includes("CORTE") || x.status.includes("SEM ESTOQUE");
+    const skuMatch = x.sku ? activeSkus.has(normalizeText(x.sku)) : !hasFilters;
+    return isDevol && skuMatch;
+  }).reduce((acc, x) => acc + x.qty, 0);
 
   const groups = {
     "DEMANDA TOTAL": demanda,
     "FINALIZADO": finalizado,
-    "AGUARDANDO SEPARAÇÃO LMX": separacaoLMX,
-    "AGUARDANDO SEPARAÇÃO OUTROS": separacaoOutros,
+    "AGUARDANDO SEPARAÇÃO (Total)": separacaoTotal,
+    "↳ FILA REAL LMX (Via Trânsito)": separacaoLMXTransito,
     "SHERINK ENVIADO": sum(filteredSkus, "shrinkEnviado"),
-    "PENDENTE": Math.max(0, demanda - finalizado),
-    "DEVOLUÇÃO / CORTE": transitoRows.filter(x => x.status.includes("DEVOL") || x.status.includes("CORTE") || x.status.includes("SEM ESTOQUE")).reduce((acc, x) => acc + x.qty, 0)
+    "PENDENTE (Ruptura)": Math.max(0, demanda - finalizado),
+    "DEVOLUÇÃO / CORTE": devolucaoCorte
   };
+
   box.innerHTML = Object.entries(groups).map(([name, qty]) => `
-    <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border border-slate-800">
-      <span class="text-slate-300 font-bold">${name}</span>
+    <div class="flex justify-between items-center p-3 rounded-xl ${name.includes('↳') ? 'bg-indigo-900/20 border-indigo-500/30 ml-4' : 'bg-slate-950 border-slate-800'} border">
+      <span class="${name.includes('↳') ? 'text-indigo-300' : 'text-slate-300'} font-bold ${name.includes('↳') ? 'text-[11px]' : 'text-xs'}">${name}</span>
       <span class="text-white font-black">${formatNumber(qty)} <small class="text-slate-500">un</small></span>
     </div>
   `).join("");
@@ -792,8 +806,8 @@ function renderTable() {
       <td class="p-3 text-slate-300">${item.operador}</td>
       <td class="p-3 text-center">${item.curva}</td>
       <td class="p-3 text-right">${formatNumber(item.demanda)}</td>
-      <td class="p-3 text-right font-bold text-cyan-300">${formatNumber(item.finalizado)}</td>
-      <td class="p-3 text-right font-bold text-rose-300">${formatNumber(Math.max(0, item.demanda - item.finalizado))}</td>
+      <td class="p-3 text-right text-cyan-300 font-bold">${formatNumber(item.finalizado)}</td>
+      <td class="p-3 text-right text-rose-300 font-bold">${formatNumber(Math.max(0, item.demanda - item.finalizado))}</td>
       <td class="p-3 text-right ${item.atendimento >= 100 ? "text-emerald-300" : "text-amber-300"}">${formatPct(item.atendimento)}</td>
       <td class="p-3 text-right text-emerald-300">${formatNumber(item.merco)}</td>
       <td class="p-3 text-right text-violet-300">${formatNumber(item.lmx)}</td>

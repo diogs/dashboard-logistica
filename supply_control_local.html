@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Supply Control - Shopee & Meli</title>
+
+  <!-- Tailwind, Chart.js, FontAwesome e SheetJS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy: '#0A0F24',
+            card: '#151D35',
+            line: '#26314F'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body { background:#0A0F24; color:#E2E8F0; }
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background:#0f172a; }
+    ::-webkit-scrollbar-thumb { background:#475569; border-radius: 4px; }
+  </style>
+</head>
+
+<body class="min-h-screen">
+  <header class="sticky top-0 z-40 bg-navy/95 backdrop-blur border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+          <i class="fa-solid fa-box-open text-white text-xl"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-black text-white">Supply Control <span class="text-xs bg-slate-800 border border-slate-700 px-2 py-1 rounded-full text-slate-300">SHOPEE & MELI</span></h1>
+          <p class="text-xs text-slate-400">Dashboard Offline • Lendo arquivo Excel local (data.xlsx)</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="text-right">
+          <p class="text-xs text-slate-400">Origem de Dados</p>
+          <p id="sourceStatus" class="text-xs font-bold text-amber-400">Aguardando...</p>
+        </div>
+
+        <button onclick="exportToExcel()" class="px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg transition-colors">
+          <i class="fa-solid fa-file-excel mr-2"></i>Baixar Relatório
+        </button>
+
+        <button onclick="loadAllData()" class="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg transition-colors">
+          <i class="fa-solid fa-rotate-right mr-2"></i>Recarregar Base
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto p-4 lg:p-8 space-y-6">
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Demanda em Lista</p>
+        <h2 id="kpiDemanda" class="text-4xl font-black text-white mt-2">0</h2>
+        <p class="text-xs text-slate-400 mt-2"><span class="bg-blue-500/20 text-blue-300 px-2 py-1 rounded font-bold">Consolidado</span> unidades</p>
+      </div>
+
+      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Aguardando Separação</p>
+        <h2 id="kpiSeparacao" class="text-4xl font-black text-amber-400 mt-2">0</h2>
+        <p class="text-xs text-slate-400 mt-2"><span class="bg-amber-500/20 text-amber-300 px-2 py-1 rounded font-bold">Fila de CD</span> unidades</p>
+      </div>
+
+      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Produção de Shrink</p>
+        <h2 id="kpiShrink" class="text-4xl font-black text-violet-400 mt-2">0</h2>
+        <p class="text-xs text-slate-400 mt-2"><span class="bg-violet-500/20 text-violet-300 px-2 py-1 rounded font-bold">Envelopamento</span></p>
+      </div>
+
+      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Pendente / Falta</p>
+        <h2 id="kpiPendente" class="text-4xl font-black text-rose-400 mt-2">0</h2>
+        <p class="text-xs text-slate-400 mt-2"><span class="bg-rose-500/20 text-rose-300 px-2 py-1 rounded font-bold">Ruptura</span></p>
+      </div>
+
+      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Atendimento Médio</p>
+        <h2 id="kpiAtendimento" class="text-4xl font-black text-emerald-400 mt-2">0%</h2>
+        <p class="text-xs text-slate-400 mt-2"><span class="bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded font-bold">Calculado</span></p>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">Estoque Total Consolidado</p>
+        <h2 id="kpiEstoqueTotal" class="text-3xl font-black text-blue-400 mt-2">0</h2>
+        <p class="text-xs text-slate-400 mt-2">Merco + LMX + Devintex, sem duplicar SKU</p>
+      </div>
+      <div class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+        <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">SKUs em Ruptura</p>
+        <h2 id="kpiRupturaSku" class="text-3xl font-black text-rose-400 mt-2">0</h2>
+        <p class="text-xs text-slate-400 mt-2">TOTAL LISTA maior que estoque disponível</p>
+      </div>
+    </section>
+
+    <section class="bg-card border border-line rounded-2xl p-5 shadow-lg">
+      <div class="flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between mb-4">
+        <h3 class="font-black text-white"><i class="fa-solid fa-filter text-indigo-400 mr-2"></i>Filtros de Busca</h3>
+        <input id="searchInput" oninput="applyFilters()" placeholder="Pesquisar por SKU ou Descrição..." class="w-full lg:w-96 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-500 transition-colors">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+        <select id="opFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
+          <option value="">Operação: Todas</option>
+          <option value="SHOPEE">SHOPEE</option>
+          <option value="MERCADO LIVRE">MERCADO LIVRE</option>
+          <option value="MELI">Meli</option>
+        </select>
+
+        <select id="listaFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
+          <option value="">Listas: Todas</option>
+        </select>
+
+        <select id="atendimentoFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
+          <option value="">Atendimento: Todos</option>
+          <option value="pendente">&lt; 100%</option>
+          <option value="concluido">100%</option>
+        </select>
+
+        <select id="shrinkFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
+          <option value="">Shrink: Todos</option>
+          <option value="SIM">Com Shrink</option>
+          <option value="NÃO">Sem Shrink</option>
+        </select>
+
+        <select id="kitFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
+          <option value="">Kit: Todos</option>
+          <option value="SIM">É Kit</option>
+          <option value="NÃO">Não é Kit</option>
+        </select>
+
+        <select id="sepFilter" onchange="applyFilters()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none">
+          <option value="">Separação: Todas</option>
+          <option value="sim">Em Separação</option>
+          <option value="nao">Sem Separação</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-8 bg-card border border-line rounded-2xl p-5 shadow-lg">
+        <h3 class="font-black text-white mb-4"><i class="fa-solid fa-chart-simple text-blue-400 mr-2"></i>Estoque Consolidado por Operador</h3>
+        <div class="h-72"><canvas id="stockChart"></canvas></div>
+      </div>
+
+      <div class="lg:col-span-4 bg-card border border-line rounded-2xl p-5 shadow-lg">
+        <h3 class="font-black text-white mb-4"><i class="fa-solid fa-truck-fast text-amber-400 mr-2"></i>Pipeline do In-Trânsito</h3>
+        <div id="pipelineBox" class="space-y-3 text-sm"></div>
+      </div>
+    </section>
+
+    <!-- PAINEIS DE LEAD TIME COM SLA -->
+    <section class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden shadow-lg">
+        <div id="bgSeparacao" class="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
+        <div class="pl-2">
+          <div class="flex justify-between items-start">
+            <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">LT Separação</p>
+            <span id="badgeSeparacao" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-bold">-</span>
+          </div>
+          <h2 id="ltSeparacao" class="text-3xl font-black text-slate-300 mt-2">0,0<span class="text-sm font-normal text-slate-400 ml-1">dias</span></h2>
+          <div class="w-full bg-slate-800 rounded-full h-1 mt-3"><div id="barSeparacao" class="bg-slate-600 h-1 rounded-full" style="width: 0%"></div></div>
+          <p class="text-[10px] text-slate-500 mt-2">Meta de SLA: 1,0 dia</p>
+        </div>
+      </div>
+      
+      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden shadow-lg">
+        <div id="bgShrink" class="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
+        <div class="pl-2">
+          <div class="flex justify-between items-start">
+            <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">LT Shrink</p>
+            <span id="badgeShrink" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-bold">-</span>
+          </div>
+          <h2 id="ltShrink" class="text-3xl font-black text-slate-300 mt-2">0,0<span class="text-sm font-normal text-slate-400 ml-1">dias</span></h2>
+          <div class="w-full bg-slate-800 rounded-full h-1 mt-3"><div id="barShrink" class="bg-slate-600 h-1 rounded-full" style="width: 0%"></div></div>
+          <p class="text-[10px] text-slate-500 mt-2">Meta de SLA: 1,0 dia</p>
+        </div>
+      </div>
+
+      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden shadow-lg">
+        <div id="bgTransporte" class="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
+        <div class="pl-2">
+          <div class="flex justify-between items-start">
+            <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">LT Transporte</p>
+            <span id="badgeTransporte" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-bold">-</span>
+          </div>
+          <h2 id="ltTransporte" class="text-3xl font-black text-slate-300 mt-2">0,0<span class="text-sm font-normal text-slate-400 ml-1">dias</span></h2>
+          <div class="w-full bg-slate-800 rounded-full h-1 mt-3"><div id="barTransporte" class="bg-slate-600 h-1 rounded-full" style="width: 0%"></div></div>
+          <p class="text-[10px] text-slate-500 mt-2">Meta de SLA: 2,0 dias</p>
+        </div>
+      </div>
+
+      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden shadow-lg">
+        <div id="bgRecebimento" class="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
+        <div class="pl-2">
+          <div class="flex justify-between items-start">
+            <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">LT Recebimento</p>
+            <span id="badgeRecebimento" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-bold">-</span>
+          </div>
+          <h2 id="ltRecebimento" class="text-3xl font-black text-slate-300 mt-2">0,0<span class="text-sm font-normal text-slate-400 ml-1">dias</span></h2>
+          <div class="w-full bg-slate-800 rounded-full h-1 mt-3"><div id="barRecebimento" class="bg-slate-600 h-1 rounded-full" style="width: 0%"></div></div>
+          <p class="text-[10px] text-slate-500 mt-2">Meta de SLA: 1,0 dia</p>
+        </div>
+      </div>
+
+      <div class="bg-card border border-line rounded-2xl p-5 relative overflow-hidden shadow-lg">
+        <div id="bgTotal" class="absolute top-0 left-0 w-1 h-full bg-slate-700"></div>
+        <div class="pl-2">
+          <div class="flex justify-between items-start">
+            <p class="text-xs uppercase tracking-wide text-slate-400 font-bold">LT Inbound</p>
+            <span id="badgeTotal" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-bold">-</span>
+          </div>
+          <h2 id="ltTotal" class="text-3xl font-black text-slate-300 mt-2">0,0<span class="text-sm font-normal text-slate-400 ml-1">dias</span></h2>
+          <div class="w-full bg-slate-800 rounded-full h-1 mt-3"><div id="barTotal" class="bg-slate-600 h-1 rounded-full" style="width: 0%"></div></div>
+          <p class="text-[10px] text-slate-500 mt-2">Meta Geral: 5,0 dias</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-card border border-line rounded-2xl overflow-hidden shadow-lg">
+      <div class="p-5 border-b border-line flex flex-col sm:flex-row justify-between gap-2">
+        <div>
+          <h3 class="font-black text-white"><i class="fa-solid fa-list text-slate-400 mr-2"></i>Detalhamento de SKUs</h3>
+          <p class="text-xs text-slate-400">Planejamento consolidado por SKU</p>
+        </div>
+        <p class="text-sm text-slate-300">Total: <span id="skuCount" class="font-bold text-white">0</span> SKUs filtrados</p>
+      </div>
+
+      <div class="overflow-x-auto max-h-[560px]">
+        <table id="dataTable" class="w-full text-sm">
+          <thead class="sticky top-0 bg-slate-950 text-slate-400 uppercase text-xs z-10 shadow">
+            <tr>
+              <th class="text-left p-3">SKU</th>
+              <th class="text-left p-3">Produto / OBS</th>
+              <th class="text-left p-3">Lista</th>
+              <th class="text-left p-3">Operador</th>
+              <th class="text-center p-3">Curva</th>
+              <th class="text-right p-3">Demanda</th>
+              <th class="text-right p-3">Atend.%</th>
+              <th class="text-right p-3 text-emerald-300">Merco</th>
+              <th class="text-right p-3 text-violet-300">LMX</th>
+              <th class="text-right p-3 text-blue-300">Devintex</th>
+            </tr>
+          </thead>
+          <tbody id="skuTable" class="divide-y divide-slate-800"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toastBox" class="fixed top-24 right-5 z-50 space-y-3 w-96 max-w-[calc(100vw-2rem)]"></div>
+
+<script>
+// VARIAVEIS GLOBAIS
+let allSkus = [];
+let filteredSkus = [];
+let transitoRows = [];
+let shrinkRows = [];
+let stockChart = null;
+
+// Layout de colunas esperado na aba PLANEJAMENTO
+const COLS = {
+  lista: 0,
+  operacao: 1,
+  sku: 2,
+  descricao: 3,
+  curva: 4,
+  situacao: 5,
+  paletizacao: 6,
+  cxun: 7,
+  separacao: 8,
+  devolucaoMerco: 9,
+  shrinkSolicitado: 10,
+  shrinkEnviado: 11,
+  finalizado: 12,
+  kitNumerico: 13,
+  demanda: 14,
+  totalFinal: 15,
+  merco: 16,
+  lmx: 17,
+  devintex: 18,
+  palete: 19,
+  unidade: 20,
+  volumes: 21,
+  shrink: 22,
+  kit: 23,
+  atendimento: 24
+};
+
+// UTILITÁRIOS
+function normalizeText(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+}
+
+function parseNumber(value) {
+  if (typeof value === "number") return isNaN(value) ? 0 : value;
+  let s = String(value ?? "").trim();
+  if (!s || s === "-") return 0;
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+  if (hasDot && hasComma) { s = s.replace(/\./g, "").replace(",", "."); } 
+  else if (hasComma) { s = s.replace(",", "."); } 
+  else if (hasDot) {
+    const parts = s.split(".");
+    if (parts[parts.length - 1].length === 3) s = s.replace(/\./g, "");
+  }
+  s = s.replace(/[^0-9.-]/g, "");
+  const n = Number(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function formatNumber(value) {
+  return Math.round(value || 0).toLocaleString("pt-BR");
+}
+
+function formatPct(value) {
+  return `${Math.round(value || 0)}%`;
+}
+
+function toast(message, type = "info") {
+  const box = document.getElementById("toastBox");
+  const color = type === "error" ? "border-rose-500 text-rose-300" : type === "success" ? "border-emerald-500 text-emerald-300" : "border-slate-700 text-slate-300";
+  const icon = type === "error" ? "triangle-exclamation" : type === "success" ? "circle-check" : "circle-info";
+  const el = document.createElement("div");
+  el.className = `bg-slate-900 border ${color} rounded-xl p-4 shadow-xl text-sm font-bold opacity-90 transition-all duration-300`;
+  el.innerHTML = `<i class="fa-solid fa-${icon} mr-2"></i>${message}`;
+  box.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 5000);
+}
+
+function setStatus(text, color = "text-slate-300") {
+  const el = document.getElementById("sourceStatus");
+  el.className = `text-xs font-bold ${color}`;
+  el.textContent = text;
+}
+
+function parseDateValue(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (value instanceof Date && !isNaN(value)) return value;
+  if (typeof value === "number") {
+    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+    return isNaN(date) ? null : new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+  let s = String(value).trim();
+  if (!s || s === "-" || s === "#ERROR!") return null;
+  const br = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (br) {
+    const d = Number(br[1]); const m = Number(br[2]) - 1; let y = Number(br[3]);
+    if (y < 100) y += 2000;
+    if (d < 1 || d > 31 || m < 0 || m > 11 || y < 2000 || y > 2100) return null;
+    return new Date(y, m, d);
+  }
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  return null;
+}
+
+function daysBetween(start, end) {
+  const s = start instanceof Date ? start : parseDateValue(start);
+  const e = end instanceof Date ? end : parseDateValue(end);
+  if (!s || !e) return null; 
+  const startUTC = Date.UTC(s.getFullYear(), s.getMonth(), s.getDate());
+  const endUTC = Date.UTC(e.getFullYear(), e.getMonth(), e.getDate());
+  const days = Math.round((endUTC - startUTC) / 86400000);
+  if (!Number.isFinite(days) || days < 0 || days > 365) return null;
+  return days;
+}
+
+function averagePositive(values) {
+  const nums = values.filter(v => typeof v === 'number' && !isNaN(v));
+  if (!nums.length) return 0;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+// LOGICA DE NEGÓCIO E PARSERS
+function detectHeaderIndex(rows) {
+  for (let i = 0; i < Math.min(rows.length, 50); i++) {
+    const text = rows[i].map(normalizeText).join("|");
+    if (text.includes("LISTA") && text.includes("OPERAC") && (text.includes("SKU") || text.includes("DESCRI"))) return i;
+  }
+  return 0; // Fallback
+}
+
+function parsePlanejamento(rows) {
+  const headerIndex = detectHeaderIndex(rows);
+  const dataRows = rows.slice(headerIndex + 1);
+  const parsed = [];
+
+  for (const row of dataRows) {
+    const sku = String(row[COLS.sku] ?? "").trim();
+    const lista = String(row[COLS.lista] ?? "").trim();
+    if (!sku || !lista || normalizeText(sku) === "SKU") continue;
+
+    const demanda = parseNumber(row[COLS.demanda]);          
+    const finalizado = parseNumber(row[COLS.finalizado]);    
+    const merco = parseNumber(row[COLS.merco]);              
+    const lmx = parseNumber(row[COLS.lmx]);                  
+    const devintex = parseNumber(row[COLS.devintex]);        
+    const atendimento = demanda > 0 ? Math.min(100, (finalizado / demanda) * 100) : parseNumber(row[COLS.atendimento]);
+
+    parsed.push({
+      lista,
+      operacao: String(row[COLS.operacao] ?? "SHOPEE").trim().toUpperCase(),
+      sku,
+      descricao: String(row[COLS.descricao] ?? "").trim(),
+      curva: String(row[COLS.curva] ?? "C").trim(),
+      situacao: String(row[COLS.situacao] ?? "").trim(),
+      separacao: parseNumber(row[COLS.separacao]),
+      shrinkSolicitado: parseNumber(row[COLS.shrinkSolicitado]),
+      shrinkEnviado: parseNumber(row[COLS.shrinkEnviado]),
+      finalizado,
+      demanda,
+      merco,
+      lmx,
+      devintex,
+      operador: getMainOperator(merco, lmx, devintex),
+      palete: parseNumber(row[COLS.palete]),
+      unidade: parseNumber(row[COLS.unidade]),
+      volumes: parseNumber(row[COLS.volumes]),
+      shrink: normalizeText(row[COLS.shrink]).startsWith("S") ? "SIM" : "NÃO",
+      kit: normalizeText(row[COLS.kit]).startsWith("S") ? "SIM" : "NÃO",
+      atendimento
+    });
+  }
+  return parsed;
+}
+
+function getMainOperator(merco, lmx, devintex) {
+  const values = [
+    { name: "MERCOCAMP", value: Math.max(0, parseNumber(merco)) },
+    { name: "LMX", value: Math.max(0, parseNumber(lmx)) },
+    { name: "DEVINTEX", value: Math.max(0, parseNumber(devintex)) }
+  ].sort((a, b) => b.value - a.value);
+  return values[0].value > 0 ? values[0].name : "-";
+}
+
+function parseTransito(rows) {
+  const headerIndex = rows.findIndex(r => r.map(normalizeText).join("|").includes("DATA INPUT"));
+  if (headerIndex < 0) return [];
+  const header = rows[headerIndex].map(normalizeText);
+  const findIdx = (aliases, fallback) => {
+    const found = header.findIndex(h => aliases.some(a => h.includes(normalizeText(a))));
+    return found >= 0 ? found : fallback;
+  };
+
+  const IDX = {
+    dataInput: findIdx(["DATA INPUT", "INPUT"], 0),
+    descricao: findIdx(["DESCRICAO"], 2),
+    qtd: findIdx(["QTD", "QUANTIDADE"], 4),
+    status: findIdx(["STATUS", "SITUACAO"], 7),
+    dataExpedicao: findIdx(["EXPEDICAO"], 11),
+    dataRecebimento: findIdx(["RECEBIMENTO"], 12),
+    ltSeparacao: findIdx(["LT SEPARACAO", "LEAD TIME SEPARACAO"], 14),
+    ltRecebimento: findIdx(["LT RECEBIMENTO"], 15),
+    operador: findIdx(["OPERADOR"], 20),
+    movimentacao: findIdx(["MOVIMENTACAO"], 22)
+  };
+
+  const today = new Date();
+
+  return rows.slice(headerIndex + 1).map(r => {
+    const dInput = parseDateValue(r[IDX.dataInput]);
+    const dExp = parseDateValue(r[IDX.dataExpedicao]);
+    const dRec = parseDateValue(r[IDX.dataRecebimento]);
+    const statusText = normalizeText(r[IDX.status]);
+
+    let ltSep = parseNumber(r[IDX.ltSeparacao]) || null;
+    if (ltSep === null && dInput) {
+      if (!dExp && statusText.includes("AGUARDANDO")) ltSep = daysBetween(dInput, today);
+      else ltSep = daysBetween(dInput, dExp);
+    }
+
+    let ltRec = parseNumber(r[IDX.ltRecebimento]) || null;
+    if (ltRec === null && dInput) {
+      if (!dRec && statusText.includes("TRANSITO")) ltRec = daysBetween(dInput, today);
+      else ltRec = daysBetween(dInput, dRec);
+    }
+    
+    let ltTrans = null;
+    if (!dRec && statusText.includes("TRANSITO")) ltTrans = daysBetween(dExp || dInput, today);
+    else ltTrans = daysBetween(dExp, dRec);
+
+    return {
+      status: statusText,
+      qty: parseNumber(r[IDX.qtd]),
+      ltSep, ltTrans, ltRec
+    };
+  }).filter(x => x.status || x.qty || x.ltSep !== null);
+}
+
+function parseShrink(rows) {
+  const headerIndex = rows.findIndex(r => r.map(normalizeText).join("|").includes("DATA INPUT"));
+  if (headerIndex < 0) return [];
+  const header = rows[headerIndex].map(normalizeText);
+  const findIdx = (aliases, fallback) => {
+    const found = header.findIndex(h => aliases.some(a => h.includes(normalizeText(a))));
+    return found >= 0 ? found : fallback;
+  };
+
+  const IDX = {
+    dataInput: findIdx(["DATA INPUT", "INPUT"], 0),
+    status: findIdx(["STATUS"], 7),
+    dataExpedicao: findIdx(["EXPEDICAO"], 11),
+    dataRecebimento: findIdx(["RECEBIMENTO"], 12),
+    ltSeparacao: findIdx(["LT SEPARACAO"], 14),
+    ltRecebimento: findIdx(["LT RECEBIMENTO"], 15)
+  };
+
+  const today = new Date();
+
+  return rows.slice(headerIndex + 1).map(r => {
+    const dInput = parseDateValue(r[IDX.dataInput]);
+    const dExp = parseDateValue(r[IDX.dataExpedicao]);
+    const dRec = parseDateValue(r[IDX.dataRecebimento]);
+    const status = normalizeText(r[IDX.status]);
+
+    let ltShrink = parseNumber(r[IDX.ltSeparacao] || r[IDX.ltRecebimento]) || null;
+    if (ltShrink === null && dInput) {
+      if (!dExp && !dRec && (status.includes("AGUARDANDO") || status.includes("PRODUCAO"))) {
+        ltShrink = daysBetween(dInput, today);
+      } else {
+        ltShrink = daysBetween(dInput, dRec || dExp || today);
+      }
+    }
+    return { status, ltShrink, qty: 1 };
+  }).filter(x => x.status || x.ltShrink !== null);
+}
+
+// CONEXÃO EXCEL LOCAL (SUBSTITUI GOOGLE SHEETS)
+async function loadAllData() {
+  try {
+    setStatus("Baixando Excel Local...", "text-amber-400");
+    toast("Lendo arquivo data.xlsx...", "info");
+
+    // Faz a requisição HTTP para o próprio repositório para baixar o arquivo
+    const response = await fetch('./data.xlsx');
+    if (!response.ok) throw new Error("Arquivo data.xlsx não encontrado no repositório. Por favor, faça o upload dele.");
+    const arrayBuffer = await response.arrayBuffer();
+
+    // Processa o arquivo Excel binário usando a biblioteca SheetJS
+    const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+
+    const getSheetData = (sheetNames) => {
+      for (let name of sheetNames) {
+        if (workbook.Sheets[name]) return XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "" });
+      }
+      throw new Error(`Aba necessária não encontrada: ${sheetNames[0]}`);
+    };
+
+    allSkus = parsePlanejamento(getSheetData(["PLANEJAMENTO", "Planejamento"]));
+
+    try { transitoRows = parseTransito(getSheetData(["IN_TRANSITO", "INTRANSITO"])); } catch(e) { transitoRows = []; }
+    try { shrinkRows = parseShrink(getSheetData(["PRODUCAO_SHRINK", "SHRINK"])); } catch(e) { shrinkRows = []; }
+
+    populateListaFilter();
+    applyFilters();
+
+    setStatus("Conectado (data.xlsx)", "text-emerald-400");
+    toast(`${allSkus.length} SKUs processados do Excel.`, "success");
+  } catch (err) {
+    console.error(err);
+    setStatus("Arquivo Ausente", "text-rose-400");
+    toast(err.message, "error");
+  }
+}
+
+// INTERFACE E ATUALIZAÇÃO
+function populateListaFilter() {
+  const select = document.getElementById("listaFilter");
+  const current = select.value;
+  const lists = [...new Set(allSkus.map(x => x.lista).filter(Boolean))].sort();
+  select.innerHTML = `<option value="">Listas: Todas</option>`;
+  for (const lista of lists) {
+    const opt = document.createElement("option"); opt.value = lista; opt.textContent = lista; select.appendChild(opt);
+  }
+  if (lists.includes(current)) select.value = current;
+}
+
+function applyFilters() {
+  const q = normalizeText(document.getElementById("searchInput").value);
+  const op = document.getElementById("opFilter").value;
+  const lista = document.getElementById("listaFilter").value;
+  const atendimento = document.getElementById("atendimentoFilter").value;
+  const shrink = document.getElementById("shrinkFilter").value;
+  const kit = document.getElementById("kitFilter").value;
+  const sep = document.getElementById("sepFilter").value;
+
+  filteredSkus = allSkus.filter(item => {
+    if (q && !normalizeText(item.sku + " " + item.descricao).includes(q)) return false;
+    if (op && item.operacao !== op && !(op === "MELI" && item.operacao.includes("MERCADO"))) return false;
+    if (lista && item.lista !== lista) return false;
+    if (atendimento === "pendente" && item.atendimento >= 100) return false;
+    if (atendimento === "concluido" && item.atendimento < 100) return false;
+    if (shrink && item.shrink !== shrink) return false;
+    if (kit && item.kit !== kit) return false;
+    if (sep === "sim" && item.separacao <= 0) return false;
+    if (sep === "nao" && item.separacao > 0) return false;
+    return true;
+  });
+
+  updateDashboard();
+}
+
+function sum(arr, field) { return arr.reduce((acc, x) => acc + (x[field] || 0), 0); }
+
+function getConsolidatedStock(items) {
+  const bySku = new Map();
+  for (const item of items) {
+    const key = normalizeText(item.sku);
+    if (!key) continue;
+    if (!bySku.has(key)) bySku.set(key, { merco: 0, lmx: 0, devintex: 0 });
+    const current = bySku.get(key);
+    current.merco = Math.max(current.merco, Math.max(0, item.merco));
+    current.lmx = Math.max(current.lmx, Math.max(0, item.lmx));
+    current.devintex = Math.max(current.devintex, Math.max(0, item.devintex));
+  }
+  const result = { merco: 0, lmx: 0, devintex: 0 };
+  for (const stock of bySku.values()) { result.merco += stock.merco; result.lmx += stock.lmx; result.devintex += stock.devintex; }
+  return result;
+}
+
+function updateDashboard() {
+  const totalDemanda = sum(filteredSkus, "demanda");
+  const totalFinalizado = sum(filteredSkus, "finalizado");
+  const totalSeparacao = sum(filteredSkus, "separacao");
+  const totalShrink = sum(filteredSkus, "shrinkEnviado");
+  const totalPendente = Math.max(0, totalDemanda - totalFinalizado);
+  const atendimento = totalDemanda > 0 ? (totalFinalizado / totalDemanda) * 100 : 0;
+
+  document.getElementById("kpiDemanda").textContent = formatNumber(totalDemanda);
+  document.getElementById("kpiSeparacao").textContent = formatNumber(totalSeparacao);
+  document.getElementById("kpiShrink").textContent = formatNumber(totalShrink);
+  document.getElementById("kpiPendente").textContent = formatNumber(totalPendente);
+  document.getElementById("kpiAtendimento").textContent = formatPct(atendimento);
+  document.getElementById("skuCount").textContent = formatNumber(filteredSkus.length);
+
+  const stock = getConsolidatedStock(filteredSkus);
+  document.getElementById("kpiEstoqueTotal").textContent = formatNumber(stock.merco + stock.lmx + stock.devintex);
+  document.getElementById("kpiRupturaSku").textContent = formatNumber(filteredSkus.filter(item => item.demanda > (Math.max(0, item.merco) + Math.max(0, item.lmx) + Math.max(0, item.devintex))).length);
+
+  updateStockChart(stock);
+  updatePipeline(totalDemanda, totalFinalizado);
+  updateLeadTimes();
+  renderTable();
+}
+
+function updateStockChart(stock) {
+  const ctx = document.getElementById("stockChart");
+  if (stockChart) stockChart.destroy();
+  stockChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["DEVINTEX", "MERCOCAMP", "LMX"],
+      datasets: [{ label: "Estoque disponível", data: [stock.devintex, stock.merco, stock.lmx], backgroundColor: ["#3B82F6", "#10B981", "#8B5CF6"], borderRadius: 10 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: "#CBD5E1" } } },
+      scales: { x: { ticks: { color: "#CBD5E1" }, grid: { color: "#1E293B" } }, y: { ticks: { color: "#CBD5E1" }, grid: { color: "#1E293B" } } }
+    }
+  });
+}
+
+function updatePipeline(demanda, finalizado) {
+  const box = document.getElementById("pipelineBox");
+  const groups = {
+    "DEMANDA TOTAL": demanda, "FINALIZADO": finalizado,
+    "AGUARDANDO SEPARAÇÃO": sum(filteredSkus, "separacao"),
+    "SHERINK ENVIADO": sum(filteredSkus, "shrinkEnviado"),
+    "PENDENTE": Math.max(0, demanda - finalizado),
+    "DEVOLUÇÃO / CORTE": transitoRows.filter(x => x.status.includes("DEVOL") || x.status.includes("CORTE")).reduce((acc, x) => acc + x.qty, 0)
+  };
+  box.innerHTML = Object.entries(groups).map(([name, qty]) => `
+    <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border border-slate-800">
+      <span class="text-slate-300 font-bold">${name}</span>
+      <span class="text-white font-black">${formatNumber(qty)}</span>
+    </div>
+  `).join("");
+}
+
+function updateLeadTimes() {
+  const ltSep = averagePositive(transitoRows.map(x => x.ltSep));
+  const ltTrans = averagePositive(transitoRows.map(x => x.ltTrans));
+  const ltRec = averagePositive(transitoRows.map(x => x.ltRec));
+  const ltShrink = averagePositive(shrinkRows.map(x => x.ltShrink));
+  
+  const setSlaUI = (id, value, meta) => {
+    document.getElementById(`lt${id}`).innerHTML = `${(value || 0).toFixed(1).replace(".", ",")}<span class="text-sm font-normal text-slate-400 ml-1">dias</span>`;
+    const badge = document.getElementById(`badge${id}`); const bar = document.getElementById(`bar${id}`);
+    const bg = document.getElementById(`bg${id}`); const text = document.getElementById(`lt${id}`);
+    if (!badge) return;
+    bar.style.width = `${Math.min(100, (value / (meta * 1.5)) * 100)}%`;
+
+    if (value === 0) { badge.textContent = "-"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400"; bar.className = "bg-slate-600 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-slate-700"; text.className = "text-3xl font-black text-slate-300 mt-2"; }
+    else if (value <= meta) { badge.textContent = "NO PRAZO"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400"; bar.className = "bg-emerald-500 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-emerald-500"; text.className = "text-3xl font-black text-white mt-2"; }
+    else if (value <= meta * 1.5) { badge.textContent = "ATENÇÃO"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400"; bar.className = "bg-amber-500 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-amber-500"; text.className = "text-3xl font-black text-white mt-2"; }
+    else { badge.textContent = "CRÍTICO"; badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400"; bar.className = "bg-rose-500 h-1 rounded-full"; bg.className = "absolute top-0 left-0 w-1 h-full bg-rose-500"; text.className = "text-3xl font-black text-white mt-2"; }
+  };
+
+  setSlaUI('Separacao', ltSep, 1.0); setSlaUI('Shrink', ltShrink, 1.0);
+  setSlaUI('Transporte', ltTrans, 2.0); setSlaUI('Recebimento', ltRec, 1.0);
+  setSlaUI('Total', ltSep + ltShrink + ltTrans, 5.0);
+}
+
+function renderTable() {
+  const tbody = document.getElementById("skuTable");
+  const rows = filteredSkus.slice(0, 500);
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="10" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
+  tbody.innerHTML = rows.map(item => `
+    <tr class="hover:bg-slate-800/50">
+      <td class="p-3 font-bold text-white">${item.sku}</td>
+      <td class="p-3 min-w-[360px]">
+        <div class="font-semibold text-slate-100">${item.descricao}</div>
+        <div class="mt-1 flex gap-2 text-[11px]">${item.shrink === "SIM" ? '<span class="px-2 rounded bg-violet-500/20 text-violet-300">SHRINK</span>' : ''}${item.kit === "SIM" ? '<span class="px-2 rounded bg-cyan-500/20 text-cyan-300">KIT</span>' : ''}</div>
+      </td>
+      <td class="p-3 text-slate-300 font-bold">${item.lista}</td>
+      <td class="p-3 text-slate-300">${item.operador}</td>
+      <td class="p-3 text-center">${item.curva}</td>
+      <td class="p-3 text-right">${formatNumber(item.demanda)}</td>
+      <td class="p-3 text-right ${item.atendimento >= 100 ? "text-emerald-300" : "text-amber-300"}">${formatPct(item.atendimento)}</td>
+      <td class="p-3 text-right text-emerald-300">${formatNumber(item.merco)}</td>
+      <td class="p-3 text-right text-violet-300">${formatNumber(item.lmx)}</td>
+      <td class="p-3 text-right text-blue-300">${formatNumber(item.devintex)}</td>
+    </tr>
+  `).join("");
+}
+
+// FUNÇÃO PARA EXPORTAR EXCEL GERADO PELO NAVEGADOR
+function exportToExcel() {
+  toast("Gerando Excel...", "info");
+  
+  // Mapeia os dados filtrados para o formato que vai pro Excel
+  const excelData = filteredSkus.map(item => ({
+    "Lista": item.lista,
+    "Operação": item.operacao,
+    "SKU": item.sku,
+    "Descrição": item.descricao,
+    "Curva": item.curva,
+    "Operador Principal": item.operador,
+    "Requer Shrink?": item.shrink,
+    "É Kit?": item.kit,
+    "Demanda Total": item.demanda,
+    "Finalizado": item.finalizado,
+    "Atendimento %": item.atendimento,
+    "Aguardando Separação": item.separacao,
+    "Shrink Enviado": item.shrinkEnviado,
+    "Estoque Merco": item.merco,
+    "Estoque LMX": item.lmx,
+    "Estoque Devintex": item.devintex
+  }));
+
+  // Cria o arquivo virtual
+  const worksheet = XLSX.utils.json_to_sheet(excelData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Painel Filtrado");
+
+  // Ajusta o tamanho das colunas automaticamente
+  worksheet['!cols'] = [ {wch:15}, {wch:15}, {wch:15}, {wch:45}, {wch:10}, {wch:20}, {wch:15}, {wch:10}, {wch:15}, {wch:15}, {wch:15}, {wch:20}, {wch:15}, {wch:15}, {wch:15}, {wch:15} ];
+
+  // Dispara o download
+  XLSX.writeFile(workbook, "Relatorio_Supply_Control.xlsx", { compression: true });
+  toast("Download concluído!", "success");
+}
+
+window.addEventListener("load", loadAllData);
+</script>
+</body>
+</html>

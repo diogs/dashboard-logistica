@@ -244,6 +244,7 @@
               <th class="text-left p-3">Operador</th>
               <th class="text-center p-3">Curva</th>
               <th class="text-right p-3">Demanda</th>
+              <th class="text-right p-3 text-amber-400">Fila CD</th>
               <th class="text-right p-3 text-cyan-300">Finalizado</th>
               <th class="text-right p-3 text-rose-300">Pendente</th>
               <th class="text-right p-3">Atend.%</th>
@@ -733,6 +734,10 @@ function updatePipeline() {
   const finalizado = sum(filteredSkus, "finalizado");
   const separacaoTotal = sum(filteredSkus, "separacao");
 
+  const separacaoLMX = filteredSkus
+    .filter(s => s.operador === 'LMX')
+    .reduce((acc, s) => acc + s.separacao, 0);
+
   const activeSkus = new Set(filteredSkus.map(s => normalizeText(s.sku)));
   const hasFilters = filteredSkus.length < allSkus.length;
 
@@ -742,20 +747,20 @@ function updatePipeline() {
     return isDevol && skuMatch;
   }).reduce((acc, x) => acc + x.qty, 0);
 
-  const groups = {
-    "DEMANDA TOTAL": demanda,
-    "FINALIZADO": finalizado,
-    "SEPARAÇÃO LMX": separacaoTotal,
-    "SHERINK ENVIADO": sum(filteredSkus, "shrinkEnviado"),
-    "PENDENTE (Ruptura)": Math.max(0, demanda - finalizado),
-    "DEVOLUÇÃO / CORTE": devolucaoCorte
-  };
+  const groups = [
+    { name: "DEMANDA TOTAL", qty: demanda },
+    { name: "FINALIZADO", qty: finalizado },
+    { name: "AGUARDANDO SEPARAÇÃO", qty: separacaoTotal },
+    { name: "↳ LMX", qty: separacaoLMX, sub: true },
+    { name: "SHERINK ENVIADO", qty: sum(filteredSkus, "shrinkEnviado") },
+    { name: "PENDENTE (Ruptura)", qty: Math.max(0, demanda - finalizado) },
+    { name: "DEVOLUÇÃO / CORTE", qty: devolucaoCorte }
+  ];
 
-  // Renderização padrão, limpa e alinhada
-  box.innerHTML = Object.entries(groups).map(([name, qty]) => `
-    <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border border-slate-800">
-      <span class="text-slate-300 font-bold text-xs">${name}</span>
-      <span class="text-white font-black">${formatNumber(qty)} <small class="text-slate-500">un</small></span>
+  box.innerHTML = groups.map(g => `
+    <div class="flex justify-between items-center p-3 rounded-xl ${g.sub ? 'bg-indigo-900/20 border-indigo-500/30 ml-4' : 'bg-slate-950 border-slate-800'} border">
+      <span class="${g.sub ? 'text-indigo-300' : 'text-slate-300'} font-bold ${g.sub ? 'text-[11px]' : 'text-xs'}">${g.name}</span>
+      <span class="text-white font-black">${formatNumber(g.qty)} <small class="text-slate-500">un</small></span>
     </div>
   `).join("");
 }
@@ -794,7 +799,7 @@ function updateLeadTimes() {
 function renderTable() {
   const tbody = document.getElementById("skuTable");
   const rows = filteredSkus.slice(0, 700);
-  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="12" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="13" class="text-center text-slate-500 p-8">Nenhum SKU encontrado.</td></tr>`; return; }
 
   tbody.innerHTML = rows.map(item => `
     <tr class="hover:bg-slate-800/50">
@@ -810,6 +815,7 @@ function renderTable() {
       <td class="p-3 text-slate-300">${item.operador}</td>
       <td class="p-3 text-center">${item.curva}</td>
       <td class="p-3 text-right">${formatNumber(item.demanda)}</td>
+      <td class="p-3 text-right text-amber-400 font-bold">${formatNumber(item.separacao)}</td>
       <td class="p-3 text-right text-cyan-300 font-bold">${formatNumber(item.finalizado)}</td>
       <td class="p-3 text-right text-rose-300 font-bold">${formatNumber(Math.max(0, item.demanda - item.finalizado))}</td>
       <td class="p-3 text-right ${item.atendimento >= 100 ? "text-emerald-300" : "text-amber-300"}">${formatPct(item.atendimento)}</td>

@@ -726,9 +726,6 @@ function updatePipeline() {
   const finalizado = sum(filteredSkus, "finalizado");
   const separacaoTotal = sum(filteredSkus, "separacao");
 
-  const separacaoLMX = filteredSkus.filter(s => s.operador === 'LMX').reduce((acc, s) => acc + s.separacao, 0);
-  const separacaoDevintex = filteredSkus.filter(s => s.operador === 'DEVINTEX').reduce((acc, s) => acc + s.separacao, 0);
-
   const activeSkus = new Set(filteredSkus.map(s => normalizeText(s.sku)));
   const hasFilters = filteredSkus.length < allSkus.length;
 
@@ -738,22 +735,31 @@ function updatePipeline() {
     return isDevol && skuMatch;
   }).reduce((acc, x) => acc + x.qty, 0);
 
-  const pipelineItems = [
+  const groups = [
     { name: "DEMANDA TOTAL", qty: demanda },
     { name: "FINALIZADO", qty: finalizado },
     { name: "AGUARDANDO SEPARAÇÃO", qty: separacaoTotal }
   ];
 
-  if (separacaoLMX > 0) pipelineItems.push({ name: "SEPARAÇÃO LMX", qty: separacaoLMX });
-  if (separacaoDevintex > 0) pipelineItems.push({ name: "SEPARAÇÃO DEVINTEX", qty: separacaoDevintex });
+  // Agrupa e cria automaticamente uma linha para Devintex e LMX no layout padrão
+  const separacaoPorOperador = filteredSkus.reduce((acc, s) => {
+    if (s.operador && s.operador !== 'MERCOCAMP' && s.operador !== '-' && s.separacao > 0) {
+      acc[s.operador] = (acc[s.operador] || 0) + s.separacao;
+    }
+    return acc;
+  }, {});
 
-  pipelineItems.push(
-    { name: "SHERINK ENVIADO", qty: sum(filteredSkus, "shrinkEnviado") },
-    { name: "PENDENTE (Ruptura)", qty: Math.max(0, demanda - finalizado) },
-    { name: "DEVOLUÇÃO / CORTE", qty: devolucaoCorte }
-  );
+  Object.entries(separacaoPorOperador)
+    .sort((a, b) => a[0].localeCompare(b[0])) // Organiza em ordem alfabética (Devintex depois LMX)
+    .forEach(([opName, qty]) => {
+      groups.push({ name: `SEPARAÇÃO ${opName}`, qty: qty });
+    });
 
-  box.innerHTML = pipelineItems.map(g => `
+  groups.push({ name: "SHERINK ENVIADO", qty: sum(filteredSkus, "shrinkEnviado") });
+  groups.push({ name: "PENDENTE (Ruptura)", qty: Math.max(0, demanda - finalizado) });
+  groups.push({ name: "DEVOLUÇÃO / CORTE", qty: devolucaoCorte });
+
+  box.innerHTML = groups.map(g => `
     <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border border-slate-800">
       <span class="text-slate-300 font-bold text-xs">${g.name}</span>
       <span class="text-white font-black">${formatNumber(g.qty)} <small class="text-slate-500">un</small></span>

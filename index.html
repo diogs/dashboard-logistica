@@ -268,10 +268,9 @@ let transitoRows = [];
 let shrinkRows = [];
 let stockChart = null;
 
-// OPÇÕES DOS FILTROS (Com Operador Incluído)
 const filterOptions = {
   opFilter: { label: 'Operação', options: [{v: 'SHOPEE', t: 'SHOPEE'}, {v: 'MERCADO LIVRE', t: 'MERCADO LIVRE'}] },
-  listaFilter: { label: 'Listas', options: [] }, // Preenchido dinamicamente
+  listaFilter: { label: 'Listas', options: [] },
   operadorFilter: { label: 'Operador', options: [{v: 'MERCOCAMP', t: 'MERCOCAMP'}, {v: 'LMX', t: 'LMX'}, {v: 'DEVINTEX', t: 'DEVINTEX'}] },
   atendimentoFilter: { label: 'Atendimento', options: [{v: 'pendente', t: '< 100% (Pendente)'}, {v: 'concluido', t: '100% (Concluído)'}] },
   shrinkFilter: { label: 'Shrink', options: [{v: 'SIM', t: 'Com Shrink'}, {v: 'NÃO', t: 'Sem Shrink'}] },
@@ -366,6 +365,18 @@ function detectHeaderIndex(rows) {
     if (text.includes("LISTA") && text.includes("OPERAC") && (text.includes("SKU") || text.includes("DESCRI"))) return i;
   }
   return -1;
+}
+
+function getMainOperator(merco, lmx, devintex) {
+  const m = parseNumber(merco);
+  const l = parseNumber(lmx);
+  const d = parseNumber(devintex);
+  const values = [
+    { name: "MERCOCAMP", abs: Math.abs(m) },
+    { name: "LMX", abs: Math.abs(l) },
+    { name: "DEVINTEX", abs: Math.abs(d) }
+  ].sort((a, b) => b.abs - a.abs);
+  return values[0].abs > 0 ? values[0].name : "-";
 }
 
 function parsePlanejamento(rows) {
@@ -484,7 +495,6 @@ function parseShrink(rows) {
   }).filter(x => x.status || x.ltShrink !== null || x.qty);
 }
 
-// LÓGICA DE EXCEL LOCAL E RENDERIZAÇÃO
 async function loadDataFromWorkbook(workbook) {
   const getSheet = (names) => {
     for (const name of names) {
@@ -613,13 +623,8 @@ function applyFilters() {
     if (op.length > 0 && !op.includes(item.operacao)) return false;
     if (lista.length > 0 && !lista.includes(item.lista)) return false;
     
-    // Regra de operador inclusiva: mostra se o Operador Principal for o selecionado OU se houver saldo (positivo ou negativo) no operador
-    if (operador.length > 0) {
-      const matchMerco = operador.includes("MERCOCAMP") && item.merco !== 0;
-      const matchLmx = operador.includes("LMX") && item.lmx !== 0;
-      const matchDev = operador.includes("DEVINTEX") && item.devintex !== 0;
-      if (!matchMerco && !matchLmx && !matchDev && !operador.includes(item.operador)) return false;
-    }
+    // Regra estrita: O detalhamento obedece fielmente ao operador selecionado.
+    if (operador.length > 0 && !operador.includes(item.operador)) return false;
     
     if (atendimento.length > 0) {
       const isConcluido = item.atendimento >= 100;
@@ -661,21 +666,6 @@ function getConsolidatedStock(items) {
   const result = { merco: 0, lmx: 0, devintex: 0 };
   for (const stock of bySku.values()) { result.merco += stock.merco; result.lmx += stock.lmx; result.devintex += stock.devintex; }
   return result;
-}
-
-function getMainOperator(merco, lmx, devintex) {
-  const m = parseNumber(merco);
-  const l = parseNumber(lmx);
-  const d = parseNumber(devintex);
-  
-  // Utiliza o valor absoluto para garantir que estoques negativos (Ruptura) não percam seu operador dono
-  const values = [
-    { name: "MERCOCAMP", abs: Math.abs(m) },
-    { name: "LMX", abs: Math.abs(l) },
-    { name: "DEVINTEX", abs: Math.abs(d) }
-  ].sort((a, b) => b.abs - a.abs);
-  
-  return values[0].abs > 0 ? values[0].name : "-";
 }
 
 function averagePositive(values) {
@@ -734,6 +724,7 @@ function updatePipeline() {
   const finalizado = sum(filteredSkus, "finalizado");
   const separacaoTotal = sum(filteredSkus, "separacao");
 
+  // Filtra de todos os SKUS da tela, soma a separacao estritamente de onde o operador for LMX
   const separacaoLMX = filteredSkus
     .filter(s => s.operador === 'LMX')
     .reduce((acc, s) => acc + s.separacao, 0);
@@ -751,15 +742,15 @@ function updatePipeline() {
     { name: "DEMANDA TOTAL", qty: demanda },
     { name: "FINALIZADO", qty: finalizado },
     { name: "AGUARDANDO SEPARAÇÃO", qty: separacaoTotal },
-    { name: "↳ LMX", qty: separacaoLMX, sub: true },
+    { name: "SEPARAÇÃO LMX", qty: separacaoLMX },
     { name: "SHERINK ENVIADO", qty: sum(filteredSkus, "shrinkEnviado") },
     { name: "PENDENTE (Ruptura)", qty: Math.max(0, demanda - finalizado) },
     { name: "DEVOLUÇÃO / CORTE", qty: devolucaoCorte }
   ];
 
   box.innerHTML = groups.map(g => `
-    <div class="flex justify-between items-center p-3 rounded-xl ${g.sub ? 'bg-indigo-900/20 border-indigo-500/30 ml-4' : 'bg-slate-950 border-slate-800'} border">
-      <span class="${g.sub ? 'text-indigo-300' : 'text-slate-300'} font-bold ${g.sub ? 'text-[11px]' : 'text-xs'}">${g.name}</span>
+    <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border border-slate-800">
+      <span class="text-slate-300 font-bold text-xs">${g.name}</span>
       <span class="text-white font-black">${formatNumber(g.qty)} <small class="text-slate-500">un</small></span>
     </div>
   `).join("");

@@ -658,8 +658,18 @@ function getConsolidatedStock(items) {
 }
 
 function getMainOperator(merco, lmx, devintex) {
-  const values = [{ name: "MERCOCAMP", value: Math.max(0, parseNumber(merco)) }, { name: "LMX", value: Math.max(0, parseNumber(lmx)) }, { name: "DEVINTEX", value: Math.max(0, parseNumber(devintex)) }].sort((a, b) => b.value - a.value);
-  return values[0].value > 0 ? values[0].name : "-";
+  const m = parseNumber(merco);
+  const l = parseNumber(lmx);
+  const d = parseNumber(devintex);
+  
+  // Utiliza o valor absoluto para garantir que estoques negativos (Ruptura) não percam seu operador dono
+  const values = [
+    { name: "MERCOCAMP", abs: Math.abs(m) },
+    { name: "LMX", abs: Math.abs(l) },
+    { name: "DEVINTEX", abs: Math.abs(d) }
+  ].sort((a, b) => b.abs - a.abs);
+  
+  return values[0].abs > 0 ? values[0].name : "-";
 }
 
 function averagePositive(values) {
@@ -718,15 +728,13 @@ function updatePipeline() {
   const finalizado = sum(filteredSkus, "finalizado");
   const separacaoTotal = sum(filteredSkus, "separacao");
 
+  // Soma a separação (aba Planejamento) filtrando estritamente os SKUs onde o operador é a LMX
+  const separacaoLMX = filteredSkus
+    .filter(s => s.operador === 'LMX')
+    .reduce((acc, s) => acc + s.separacao, 0);
+
   const activeSkus = new Set(filteredSkus.map(s => normalizeText(s.sku)));
   const hasFilters = filteredSkus.length < allSkus.length;
-
-  const separacaoLMXTransito = transitoRows.filter(x => {
-    const isLmx = x.operador === 'LMX';
-    const isSep = x.status.includes("AGUARDANDO") || x.status.includes("SEPARA") || x.status.includes("PENDENTE");
-    const skuMatch = x.sku ? activeSkus.has(normalizeText(x.sku)) : !hasFilters;
-    return isLmx && isSep && skuMatch;
-  }).reduce((acc, x) => acc + x.qty, 0);
 
   const devolucaoCorte = transitoRows.filter(x => {
     const isDevol = x.status.includes("DEVOL") || x.status.includes("CORTE") || x.status.includes("SEM ESTOQUE");
@@ -738,15 +746,15 @@ function updatePipeline() {
     "DEMANDA TOTAL": demanda,
     "FINALIZADO": finalizado,
     "AGUARDANDO SEPARAÇÃO": separacaoTotal,
-    "SEPARAÇÃO LMX": separacaoLMXTransito,
+    "SEPARAÇÃO LMX": separacaoLMX,
     "SHERINK ENVIADO": sum(filteredSkus, "shrinkEnviado"),
     "PENDENTE (Ruptura)": Math.max(0, demanda - finalizado),
     "DEVOLUÇÃO / CORTE": devolucaoCorte
   };
 
-  // Renderização padrão, limpa e padronizada com as demais linhas
+  // Renderização padrão, limpa e alinhada
   box.innerHTML = Object.entries(groups).map(([name, qty]) => `
-    <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border-slate-800 border">
+    <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950 border border-slate-800">
       <span class="text-slate-300 font-bold text-xs">${name}</span>
       <span class="text-white font-black">${formatNumber(qty)} <small class="text-slate-500">un</small></span>
     </div>

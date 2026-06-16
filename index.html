@@ -274,13 +274,14 @@ let stockChart = null;
 const filterOptions = {
   opFilter: { label: 'Operação', options: [{v: 'SHOPEE', t: 'SHOPEE'}, {v: 'MERCADO LIVRE', t: 'MERCADO LIVRE'}] },
   listaFilter: { label: 'Listas', options: [] }, // Preenchido dinamicamente ao ler o excel
+  operadorFilter: { label: 'Operador', options: [{v: 'MERCOCAMP', t: 'MERCOCAMP'}, {v: 'LMX', t: 'LMX'}, {v: 'DEVINTEX', t: 'DEVINTEX'}] },
   atendimentoFilter: { label: 'Atendimento', options: [{v: 'pendente', t: '< 100% (Pendente)'}, {v: 'concluido', t: '100% (Concluído)'}] },
   shrinkFilter: { label: 'Shrink', options: [{v: 'SIM', t: 'Com Shrink'}, {v: 'NÃO', t: 'Sem Shrink'}] },
   kitFilter: { label: 'Kit', options: [{v: 'SIM', t: 'É Kit'}, {v: 'NÃO', t: 'Não é Kit'}] },
   sepFilter: { label: 'Separação', options: [{v: 'sim', t: 'Em Separação'}, {v: 'nao', t: 'Sem Separação'}] }
 };
 
-let selectedFilters = { opFilter: [], listaFilter: [], atendimentoFilter: [], shrinkFilter: [], kitFilter: [], sepFilter: [] };
+let selectedFilters = { opFilter: [], listaFilter: [], operadorFilter: [], atendimentoFilter: [], shrinkFilter: [], kitFilter: [], sepFilter: [] };
 
 const COLS = {
   lista: 0, operacao: 1, sku: 2, descricao: 3, curva: 4, situacao: 5, paletizacao: 6, cxun: 7, separacao: 8,
@@ -602,6 +603,7 @@ function applyFilters() {
   const q = normalizeText(document.getElementById("searchInput").value);
   const op = selectedFilters.opFilter;
   const lista = selectedFilters.listaFilter;
+  const operador = selectedFilters.operadorFilter;
   const atendimento = selectedFilters.atendimentoFilter;
   const shrink = selectedFilters.shrinkFilter;
   const kit = selectedFilters.kitFilter;
@@ -611,6 +613,7 @@ function applyFilters() {
     if (q && !normalizeText(item.sku + " " + item.descricao).includes(q)) return false;
     if (op.length > 0 && !op.includes(item.operacao)) return false;
     if (lista.length > 0 && !lista.includes(item.lista)) return false;
+    if (operador.length > 0 && !operador.includes(item.operador)) return false;
     
     if (atendimento.length > 0) {
       const isConcluido = item.atendimento >= 100;
@@ -718,10 +721,15 @@ function updatePipeline() {
   const demanda = sum(filteredSkus, "demanda");
   const finalizado = sum(filteredSkus, "finalizado");
 
+  // Filtra as quantidades de separação especificamente para LMX e o restante
+  const separacaoLMX = filteredSkus.filter(item => item.operador === 'LMX').reduce((acc, item) => acc + item.separacao, 0);
+  const separacaoOutros = filteredSkus.filter(item => item.operador !== 'LMX').reduce((acc, item) => acc + item.separacao, 0);
+
   const groups = {
     "DEMANDA TOTAL": demanda,
     "FINALIZADO": finalizado,
-    "AGUARDANDO SEPARAÇÃO": sum(filteredSkus, "separacao"),
+    "AGUARDANDO SEPARAÇÃO LMX": separacaoLMX,
+    "AGUARDANDO SEPARAÇÃO OUTROS": separacaoOutros,
     "SHERINK ENVIADO": sum(filteredSkus, "shrinkEnviado"),
     "PENDENTE": Math.max(0, demanda - finalizado),
     "DEVOLUÇÃO / CORTE": transitoRows.filter(x => x.status.includes("DEVOL") || x.status.includes("CORTE") || x.status.includes("SEM ESTOQUE")).reduce((acc, x) => acc + x.qty, 0)

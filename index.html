@@ -726,13 +726,38 @@ function updatePipeline() {
   const finalizado = sum(filteredSkus, "finalizado");
   const separacaoTotal = sum(filteredSkus, "separacao");
 
+  const separacaoPorOperador = filteredSkus.reduce((acc, s) => {
+    if (s.operador && s.operador !== 'MERCOCAMP' && s.separacao > 0) {
+      acc[s.operador] = (acc[s.operador] || 0) + s.separacao;
+    }
+    return acc;
+  }, {});
+
   const activeSkus = new Set(filteredSkus.map(s => normalizeText(s.sku)));
   const hasFilters = filteredSkus.length < allSkus.length;
+  
+  const opF = selectedFilters.opFilter;
+  const listaF = selectedFilters.listaFilter;
+  const operF = selectedFilters.operadorFilter;
 
   const devolucaoCorte = transitoRows.filter(x => {
     const isDevol = x.status.includes("DEVOL") || x.status.includes("CORTE") || x.status.includes("SEM ESTOQUE");
+    
+    // Filtro inteligente usando as novas colunas lidas do In-Trânsito
+    let passOp = true;
+    if (opF.length > 0 && x.canal) passOp = opF.some(o => x.canal.includes(o));
+
+    let passLista = true;
+    if (listaF.length > 0 && x.obs) passLista = listaF.includes(x.obs);
+
+    let passOper = true;
+    if (operF.length > 0 && x.operador && x.operador !== "-") passOper = operF.includes(x.operador);
+
+    // Confirmação dupla: cruza a nova inteligência com o mapeamento de SKU
     const skuMatch = x.sku ? activeSkus.has(normalizeText(x.sku)) : !hasFilters;
-    return isDevol && skuMatch;
+    const validContext = (x.canal || x.obs) ? (passOp && passLista && passOper && skuMatch) : skuMatch;
+
+    return isDevol && validContext;
   }).reduce((acc, x) => acc + x.qty, 0);
 
   const groups = [
@@ -740,14 +765,6 @@ function updatePipeline() {
     { name: "FINALIZADO", qty: finalizado },
     { name: "AGUARDANDO SEPARAÇÃO", qty: separacaoTotal }
   ];
-
-  // Agrupa e cria automaticamente uma linha para Devintex e LMX no layout padrão
-  const separacaoPorOperador = filteredSkus.reduce((acc, s) => {
-    if (s.operador && s.operador !== 'MERCOCAMP' && s.operador !== '-' && s.separacao > 0) {
-      acc[s.operador] = (acc[s.operador] || 0) + s.separacao;
-    }
-    return acc;
-  }, {});
 
   Object.entries(separacaoPorOperador)
     .sort((a, b) => a[0].localeCompare(b[0])) // Organiza em ordem alfabética (Devintex depois LMX)
